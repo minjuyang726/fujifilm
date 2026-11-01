@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import pipeline
+from app.routers import demo, pipeline
 
 settings = get_settings()
 
@@ -16,3 +16,4 @@ app.add_middleware(
 )
 
 app.include_router(pipeline.router)
+app.include_router(demo.router)

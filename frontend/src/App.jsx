@@ -1,11 +1,11 @@
-// Phase 0a 골격: 화면은 Phase 2부터 만든다.
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+import ReviewStatsDemo from './ReviewStatsDemo.jsx'
 
 function App() {
   return (
-    <main>
-      <h1>한국후지필름형 정기 설문 폐루프 에이전트</h1>
-      <p>환경 준비(Phase 0a) 골격입니다. backend 주소: {apiBaseUrl}</p>
+    <main className="demo-page">
+      <h1>쿠팡 리뷰 집계 (포트폴리오 데모)</h1>
+      <p className="note">읽기 전용 · 집계 숫자만 표시 · 리뷰 본문, 제목, 작성자는 보여 주지 않습니다</p>
+      <ReviewStatsDemo />
     </main>
   )
 }

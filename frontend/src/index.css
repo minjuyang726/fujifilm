@@ -109,3 +109,119 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+/* 포트폴리오 데모(plan.md 부록 A) */
+.demo-page {
+  padding: 0 24px 32px;
+  flex: 1;
+}
+
+.demo-page h1 {
+  font-size: 36px;
+  margin: 24px 0 8px;
+}
+
+.note {
+  font-size: 15px;
+}
+
+.note.error {
+  color: #b42318;
+}
+
+.demo-section {
+  margin-top: 32px;
+}
+
+.source-line {
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.table-wrap,
+.chart-wrap {
+  overflow-x: auto;
+}
+
+.stats-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 15px;
+}
+
+.stats-table caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.stats-table th,
+.stats-table td {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: right;
+  vertical-align: top;
+}
+
+.stats-table thead th {
+  background: var(--code-bg);
+  color: var(--text-h);
+  text-align: center;
+}
+
+.stats-table th[scope='row'] {
+  text-align: left;
+  color: var(--text-h);
+  font-weight: 500;
+}
+
+.stats-table tfoot th,
+.stats-table tfoot td {
+  background: var(--code-bg);
+  font-weight: 600;
+}
+
+.num {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  color: var(--text-h);
+}
+
+.num .src {
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 130%;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.quarter-chart {
+  width: 100%;
+  min-width: 480px;
+  height: auto;
+}
+
+.quarter-chart .bar {
+  fill: var(--accent);
+}
+
+.quarter-chart .grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.quarter-chart .axis-label,
+.quarter-chart .value-label {
+  fill: var(--text);
+  font-size: 10px;
+}
+
+.demo-footer {
+  margin-top: 32px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
