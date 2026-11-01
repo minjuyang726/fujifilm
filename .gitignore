@@ -6,3 +6,7 @@ node_modules
 dist
 __pycache__
 logs
+
+# 원본 데이터와 합성 응답 결과는 저장소에 올리지 않는다 (spec.md SQ-11)
+database/data/
+*.csv
