@@ -70,11 +70,11 @@ Phase 0a에서 아래 명령을 실제로 실행해 확인했다. "확인 필요
 | API 문서 화면 | `http://localhost:8000/docs` | 확인됨 |
 | backend 테스트 | `pytest` (backend에서). 설정은 `backend/pytest.ini` | 확인됨 (3개 통과, SQLite) |
 | Supabase 연결 확인 | `python scripts/check_db.py` (backend에서) | `DATABASE_URL`이 없을 때의 실패 메시지만 확인. 성공 경로는 사용자가 `backend/.env`를 채운 뒤 확인 필요 |
-| 마이그레이션 적용 | `alembic upgrade head` (backend에서). 설정은 `backend/alembic.ini`, `backend/migrations/` | 설정 로드(`alembic heads`)와 `DATABASE_URL` 없을 때의 실패 메시지만 확인. 적용은 테이블이 생기는 Phase 0b와 `DATABASE_URL`이 있어야 확인 가능 |
+| 마이그레이션 적용 | `alembic upgrade head` (backend에서). 설정은 `backend/alembic.ini`, `backend/migrations/` | 임시 SQLite에서 적용과 `alembic check`를 확인함(Phase 0b). Supabase 적용은 사용자가 실행한 뒤 확인 필요 |
 | frontend 패키지 설치 | `npm install` (frontend에서) | 확인됨 |
 | frontend 실행 | `npm run dev` (frontend에서), `http://localhost:5173` | 확인됨 (포트 5173 고정) |
 | frontend 빌드·점검 | `npm run build`, `npm run lint` (frontend에서) | 확인됨 |
-| 적재 스크립트 | `backend/scripts/` | `check_db.py`만 있음. 적재 스크립트 이름과 실행 방식은 Phase 0b에서 정함 |
+| 리뷰 적재 | `python scripts/load_reviews.py` (backend에서). CSV만 점검하려면 `--check-only` | 임시 SQLite에서 확인함(1,302행, 두 번 실행해도 그대로). Supabase 실행은 사용자가 한 뒤 확인 필요 |
 | n8n | 워크플로 파일은 `backend/n8n/` | 기본안(설계 제안). 실행 방법은 확인 필요 |
 
 환경 값은 `backend/.env`(비밀 값)와 `frontend/.env`(backend 주소만)에 넣는다. 항목 이름은 각 폴더의 `.env.example`에 있다.

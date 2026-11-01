@@ -42,7 +42,7 @@
 | Phase | 이름 | 선행 | 소요(가정) | Git 저장점 | 상태 |
 | --- | --- | --- | --- | --- | --- |
 | 0a | 환경 준비 | 없음 | 4시간 | `phase-0a-scaffold` | 구현 완료, 완료 기준 4번 대기(사용자 `.env`) |
-| 0b | 리뷰 적재 | 0a | 4시간 | `phase-0b-reviews-loaded` | 대기 |
+| 0b | 리뷰 적재 | 0a | 4시간 | `phase-0b-reviews-loaded` | 구현 완료, 완료 기준은 사용자가 Supabase에서 확인 대기 |
 | 0c | 설문 구조와 합성 응답 적재 | 0a, G2 | 8시간 | `phase-0c-survey-synthetic` | 대기 |
 | 0d | 네이버 글 수집·적재 (보류) | 0a, SQ-12 결정, 네이버 약관 확인 | 6시간 | `phase-0d-naver-loaded` | 보류 |
 | 1 | 읽기 API와 오류·로그 기반 | 0b, 0c, G1 | 5시간 | `phase-1-read-api` | 대기 |
@@ -90,7 +90,7 @@
 ### Phase 0b: 리뷰 적재
 
 **만드는 것**
-- `product`, `review` 테이블(spec.md 3.2절)과 마이그레이션.
+- `product`, `review` 테이블(spec.md 3.2절)과 마이그레이션. `product.family_id`와 `product_family` 테이블은 제품군 목록이 정해지는 Phase 1(G1)에서 추가한다.
 - 쿠팡 CSV(`database/data/`에 복사해 둔 파일)를 읽어 적재하는 스크립트. `author`, `seller`, `source_file`, `original_no`는 읽지 않고, 빈 문자열은 NULL로 바꾼다(spec.md 3.1절).
 
 **완료 확인 기준** (Supabase의 Table Editor에서)
@@ -102,6 +102,19 @@
 6. 적재 스크립트를 두 번 실행해도 `review` 행이 1,302개로 그대로다.
 
 **예상 소요** 4시간(가정) **선행** 0a **저장점** `phase-0b-reviews-loaded`
+
+**확인 결과** (2026-11-01, 임시 SQLite 파일에서 직접 실행. Supabase에는 아직 쓰지 않았다)
+- 마이그레이션 `0001`이 적용됐고 `alembic check`가 "변경 없음"이었다(모델과 마이그레이션이 같다).
+- 실제 CSV를 적재한 뒤 값이 기준 1~4와 모두 일치했다: `review` 1,302행, `product` 3행, `title` NULL 1,152, `review_text` NULL 1,005, `variant` 값 있음 351, 평점 5점 1,164 / 4점 91 / 3점 25 / 2점 4 / 1점 18, `review_id` 1043~2344 (모두 실측).
+- 같은 CSV를 한 번 더 적재해도 행 수가 그대로였다(기준 6). 빈 문자열로 남은 값은 0개다.
+- `review` 테이블에 `author` 열이 없다(기준 5). pytest는 11개 통과했다(SQLite).
+- 적재 스크립트가 출력하는 "대상 DB"는 `sqlite`였다. 이 확인에서 Supabase에는 접속하지 않았다.
+
+**Supabase에서 사용자가 확인할 순서** (`backend` 폴더에서, `.env`에 `DATABASE_URL`이 있어야 한다)
+1. `alembic upgrade head`
+2. `python scripts/load_reviews.py` — 출력에 "대상 DB: postgresql"이 보이는지, "DB에 들어 있는 값"의 숫자가 위와 같은지 본다.
+3. Table Editor에서 기준 1~5를 확인한다.
+4. 스크립트를 한 번 더 실행해 `review`가 1,302행 그대로인지 본다(기준 6).
 
 ### Phase 0c: 설문 구조와 합성 응답 적재
 
