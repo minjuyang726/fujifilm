@@ -1,7 +1,10 @@
 """DB 연결. 운영은 Supabase(PostgreSQL), 테스트는 SQLite."""
 
+from collections.abc import Iterator
+from functools import lru_cache
+
 from sqlalchemy import Engine, create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import get_settings
 
@@ -25,3 +28,17 @@ def make_engine(url: str | None = None) -> Engine:
 
 def make_session_factory(engine: Engine) -> sessionmaker:
     return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+
+@lru_cache
+def _default_session_factory() -> sessionmaker:
+    return make_session_factory(make_engine())
+
+
+def get_session() -> Iterator[Session]:
+    """FastAPI 의존성. 요청마다 세션 하나를 열고 닫는다. 테스트는 이 함수를 대체한다."""
+    session = _default_session_factory()()
+    try:
+        yield session
+    finally:
+        session.close()

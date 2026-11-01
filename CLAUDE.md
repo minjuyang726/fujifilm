@@ -75,6 +75,8 @@ Phase 0a에서 아래 명령을 실제로 실행해 확인했다. "확인 필요
 | frontend 실행 | `npm run dev` (frontend에서), `http://localhost:5173` | 확인됨 (포트 5173 고정) |
 | frontend 빌드·점검 | `npm run build`, `npm run lint` (frontend에서) | 확인됨 |
 | 리뷰 적재 | `python scripts/load_reviews.py` (backend에서). CSV만 점검하려면 `--check-only` | 임시 SQLite에서 확인함(1,302행, 두 번 실행해도 그대로). Supabase 실행은 사용자가 한 뒤 확인 필요 |
+| 파일럿 표본 뽑기 | `python scripts/pilot_sample.py` (backend에서). 층화는 `--stratify product` | 임시 SQLite에서 확인함(310건 중 100건, 같은 seed면 같은 id). DB에서 읽기만 함. 결과는 `database/data/pilot_sample_ids.json`(추적 안 됨) |
+| 광고성 판정 실행 | `POST /api/rounds/{round_id}/pipeline/ad-judgement`, `GET /api/runs/{run_id}` (`/docs` 화면에서) | 가짜 클라이언트로만 확인함. 본문의 `review_ids`는 필수이고 파일럿은 표본의 `review_ids`를 넣는다. 실제 실행에는 `backend/.env`의 `OPENAI_API_KEY`, `OPENAI_MODEL_AD`와 `round` 행 하나가 필요하다. 실제 호출은 prd.md Q-17-3과 G3 전에는 하지 않는다 |
 | n8n | 워크플로 파일은 `backend/n8n/` | 기본안(설계 제안). 실행 방법은 확인 필요 |
 
 환경 값은 `backend/.env`(비밀 값)와 `frontend/.env`(backend 주소만)에 넣는다. 항목 이름은 각 폴더의 `.env.example`에 있다.

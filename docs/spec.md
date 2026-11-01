@@ -161,13 +161,14 @@ KOSSDA 자료의 변수 구조 개요는 확인되었습니다(전달받은 값,
 | review_id | FK → review | |
 | run_id | FK → pipeline_run | |
 | ad_probability | 실수, NULL 허용 | 0~1 CHECK |
-| ad_weight | 실수, NULL 허용 | 1 − ad_probability에 하한을 적용한 값(FR-1.5, 1.7). 하한은 확인 필요 SQ-3 |
-| weight_floor_used | 실수, NULL 허용 | 계산에 쓴 하한 값을 기록한다 |
-| rule_signals | JSON, NULL 허용 | 규칙이 낸 신호. 규칙과 LLM을 결합하는 방식은 확인 필요 SQ-3 |
-| model_name, prompt_version | 텍스트 | 반복 실행 일치율(NFR-R1) 측정용 |
+| ad_weight | 실수, NULL 허용 | 1 − ad_probability(FR-1.5, 1.7). 구현(Phase 3)은 하한 없이 `1 − 확률`을 저장한다. 하한은 확인 필요 SQ-3, prd.md Q-7 |
+| model_name, prompt_version | 텍스트, NULL 허용 | 반복 실행 일치율(NFR-R1) 측정용. `skipped`는 LLM을 부르지 않아 NULL |
 | status | 텍스트 | `ok`, `failed`, `skipped` CHECK. 제목·본문이 모두 없는 글은 LLM에 보내지 않고 `skipped`로 기록한다 |
 | error_code | 텍스트, NULL 허용 | |
 | judged_at | 시각 | |
+
+- 구현에서 추가한 제약: `(review_id, run_id)` 유일, `status = 'ok'`일 때만 `ad_probability`가 NULL이 아님(CHECK), `run_id` 색인.
+- `weight_floor_used`(하한 값 기록)와 `rule_signals`(규칙 신호)는 구현하지 않았다. SQ-3(규칙과 LLM 결합)과 Q-7(하한)이 정해질 때 추가한다.
 
 - 글은 삭제하지 않고 가중만 낮춥니다(FR-1.6, DR-3). 이 테이블은 리뷰를 바꾸지 않습니다.
 - 이전 실행의 판정을 남길지 덮어쓸지는 정해지지 않았습니다(확인 필요 SQ-8). 기본안(설계 제안)은 남기는 것입니다.
@@ -234,11 +235,11 @@ KOSSDA 자료의 변수 구조 개요는 확인되었습니다(전달받은 값,
 | 열 | 형식 | 비고 |
 | --- | --- | --- |
 | run_id | 정수, 기본 키 | |
-| round_id, family_id | FK, family_id는 NULL 허용 | |
+| round_id, family_id | round_id는 FK, family_id는 NULL 허용 | 구현은 `family_id`를 FK 없는 정수로 둔다(`product_family` 테이블이 아직 없음) |
 | step | 텍스트 | 5.2절의 단계 이름 |
 | status | 텍스트 | `queued`, `running`, `succeeded`, `partial`, `failed` CHECK |
-| counters | JSON | 처리 건수, 실패 건수, 제외된 제안 문장 수 등 |
-| error_code, error_message | 텍스트, NULL 허용 | 비밀 값과 본문을 포함하지 않는다 |
+| counters | JSON | 처리 건수, 실패 건수, 제외된 제안 문장 수 등. `ad-judgement`는 `eligible`, `skipped`, `sent`, `ok`, `failed`, `not_run` |
+| error_code | 텍스트, NULL 허용 | 비밀 값과 본문을 포함하지 않는다. 구현은 `error_message` 열을 두지 않는다(메시지에 본문이 섞이는 것을 막기 위함) |
 | started_at, finished_at | 시각 | |
 
 **llm_call_log (LLM 호출 기록)**
@@ -247,12 +248,12 @@ KOSSDA 자료의 변수 구조 개요는 확인되었습니다(전달받은 값,
 | --- | --- | --- |
 | call_id | 정수, 기본 키 | |
 | run_id | FK → pipeline_run | |
-| purpose | 텍스트 | `ad_judgement`, `action_suggestion`, `next_survey_draft` CHECK |
-| model, prompt_version | 텍스트 | |
+| call_type | 텍스트 | 호출 종류. 구현은 호출 A만 있어 `A`. 다른 호출은 해당 Phase에서 추가(이전 명세의 `purpose` 값 `ad_judgement` 등을 대체) |
+| model_name, prompt_version | 텍스트 | |
 | attempt_no | 정수 | |
-| status | 텍스트 | `ok`, `invalid_output`, `api_error`, `timeout` |
+| status | 텍스트 | `ok`, `invalid_output`, `api_error`. 시간 초과는 `api_error`이고 `error_code`가 `TIMEOUT` |
 | item_count | 정수 | 한 호출에 넣은 항목 수 |
-| tokens_prompt, tokens_completion | 정수, NULL 허용 | 비용 점검용(NFR-C2, C3) |
+| input_tokens, output_tokens | 정수, NULL 허용 | 비용 점검용(NFR-C2, C3) |
 | latency_ms | 정수 | |
 | error_code | 텍스트, NULL 허용 | |
 | created_at | 시각 | |
@@ -359,6 +360,7 @@ n8n은 "회차별 정기 실행과 단계 연결"을 맡습니다. 단계를 bac
 
 - 단계는 시간이 오래 걸릴 수 있어(LLM 호출) POST는 실행 기록을 만들고 바로 201로 돌려주며, 진행은 A-9로 확인합니다. 백그라운드 실행 방식은 설계 제안입니다.
 - 400은 `step`이 목록에 없거나 선행 단계가 끝나지 않았을 때 씁니다.
+- 구현 현황(Phase 3): `ad-judgement`만 있고 경로가 `/api/rounds/{round_id}/pipeline/ad-judgement`로 고정입니다(다른 step과 400은 아직 없음). 서버가 요청 안에서 끝까지 실행한 뒤 201을 돌려줍니다(백그라운드 실행 아님). 본문은 `{family_id?, review_ids}`이고 `review_ids`는 필수입니다. 비었거나 없거나, 존재하지 않는 번호가 있거나, 한 번에 보낼 상한(`AD_JUDGEMENT_MAX_ITEMS`, 기본 100건, 설계 제안)을 넘으면 422(`TOO_MANY_REVIEWS`, `UNKNOWN_REVIEW_IDS`)로 거절하고 아무것도 보내지 않습니다. 모델 이름이나 OpenAI 키가 없으면 500(`MODEL_NOT_CONFIGURED`, `LLM_NOT_CONFIGURED`)입니다. 오류 본문은 `detail={code, message}`이고 7.1절의 통일 형식은 Phase 1에서 만듭니다.
 - 같은 단계를 다시 실행할 때 이전 결과를 어떻게 처리할지는 정해지지 않았습니다(확인 필요 SQ-8). 기본안(설계 제안)은 쌓는 것입니다: 실행마다 새 결과를 만들고 이전 결과를 지우지 않으며, 화면은 가장 최근에 성공한 실행의 결과를 보여줍니다. "가장 최근 성공한 실행을 보여준다"는 규칙은 이 명세에서 처음 적는 것입니다.
 
 ## 5. 화면별 구성과 사용하는 API
@@ -386,7 +388,7 @@ n8n은 "회차별 정기 실행과 단계 연결"을 맡습니다. 단계를 bac
 | --- | --- |
 | 서비스 | OpenAI API. 호출은 backend의 `llm/client`만 한다. 프런트엔드와 n8n은 LLM을 직접 부르지 않는다 (설계 제안) |
 | 키 | `backend/.env`에서만 읽는다. 로그와 응답에 넣지 않는다 |
-| 모델 | 정해지지 않음 (확인 필요 SQ-9). 기본안(설계 제안): 모델 이름을 코드에 박지 않고 호출 종류별(광고성 판정, 액션 제안 서술, 문항 초안) 환경 값으로 둔다. 같은 모델을 쓸지 다르게 쓸지는 나중에 정하고, 호출마다 모델 이름을 `ad_judgement.model_name`과 `llm_call_log.model`에 남겨 모델별로 반복 실행 일치율(NFR-R1)을 비교할 수 있게 한다 |
+| 모델 | 정해지지 않음 (확인 필요 SQ-9). 기본안(설계 제안): 모델 이름을 코드에 박지 않고 호출 종류별(광고성 판정, 액션 제안 서술, 문항 초안) 환경 값으로 둔다. 같은 모델을 쓸지 다르게 쓸지는 나중에 정하고, 호출마다 모델 이름을 `ad_judgement.model_name`과 `llm_call_log.model_name`에 남겨 모델별로 반복 실행 일치율(NFR-R1)을 비교할 수 있게 한다 |
 | 입력 제한 | `author`와 `variant`는 어떤 호출에도 넣지 않는다(NFR-S2). 필요한 열만 허용 목록으로 골라 보낸다 |
 | 출력 | JSON만 받는다. 출력 스키마를 호출에 지정하는 방식(구조화 출력)은 모델이 정해진 뒤 확인(확인 필요 SQ-9) |
 | 무작위성 | 반복 실행 일치율(NFR-R1)을 위해 낮게 둔다. 값은 확인 필요 SQ-9 |

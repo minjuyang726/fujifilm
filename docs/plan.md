@@ -47,7 +47,7 @@
 | 0d | 네이버 글 수집·적재 (보류) | 0a, SQ-12 결정, 네이버 약관 확인 | 6시간 | `phase-0d-naver-loaded` | 보류 |
 | 1 | 읽기 API와 오류·로그 기반 | 0b, 0c, G1 | 5시간 | `phase-1-read-api` | 대기 |
 | 2 | 대시보드 설문 영역 | 1 | 6시간 | `phase-2-dashboard-survey` | 대기 |
-| 3 | 광고성 판정과 파일럿 | 0b, G3 | 10시간 | `phase-3-ad-judgement-pilot` | 대기 |
+| 3 | 광고성 판정과 파일럿 | 0b, G3 | 10시간 | `phase-3-ad-judgement-pilot` | 호출 모듈·파이프라인 골격 구현(가짜 클라이언트로 검증). 실제 호출과 파일럿은 대기 |
 | 4 | VOC 집계, 가중 토글, 판정 불가 | 2, 3, G4 | 8시간 | `phase-4-voc-weighted` | 대기 |
 | 5 | 분석 스냅샷, 액션 제안, 근거 | 4 | 12시간 | `phase-5-suggestions-evidence` | 대기 |
 | 6 | 문항 초안, 리포트, 내보내기 (폐루프 완주) | 5, G5 | 12시간 | `phase-6-closed-loop` | 대기 |
@@ -119,7 +119,7 @@
 ### Phase 0c: 설문 구조와 합성 응답 적재
 
 **만드는 것**
-- `round`, `survey_question`, `survey_response`, `survey_answer` 테이블.
+- `survey_question`, `survey_response`, `survey_answer` 테이블. (`round`는 Phase 3 마이그레이션 `2c6efdf1a38e`에서 이미 만들었다.)
 - KOSSDA 변수 구조를 따른 문항 정의와, G2에서 정한 건수·회차 수의 합성 응답 생성기(라벨 고정).
 - 합성 응답 적재 스크립트. 합성 응답에는 `is_synthetic`이 항상 참이다(DR-2).
 
@@ -195,6 +195,14 @@
 7. 가중치 하한 값이 기록되어 있다.
 
 **예상 소요** 10시간(가정). 골든셋 라벨링 같은 사람 작업은 포함하지 않았다 **선행** 0b, G3. 파일럿 전에 사용자가 OpenAI의 데이터 사용·보관 조건(학습 사용 여부 등)을 직접 확인해야 하고, 100건에서 이름이 든 본문을 가려내는 사람 작업(시간은 확인 필요 PQ-14)이 필요하다 **저장점** `phase-3-ad-judgement-pilot`
+
+**구현 현황** (2026-11-01, 가짜 클라이언트로만 검증. 실제 OpenAI 호출은 하지 않았다)
+- 만든 것: `round`, `pipeline_run`, `ad_judgement`, `llm_call_log` 테이블과 마이그레이션 `2c6efdf1a38e`(PostgreSQL에서는 4개 테이블에 RLS도 켠다), 호출 A 모듈(`app/llm/`: 클라이언트, 프롬프트 `ad-v1`, 출력 스키마, 검증), 묶음·재시도 로직과 단계 실행(`app/services/`), `POST /api/rounds/{round_id}/pipeline/ad-judgement`와 `GET /api/runs/{run_id}`, 표본 스크립트 `scripts/pilot_sample.py`.
+- 확인한 것: pytest 95개 통과(SQLite). 실제 CSV를 임시 SQLite에 적재해 가짜 클라이언트로 실행하니 `eligible` 310, `skipped` 992(실측), 기본 상한에서 `sent` 100·`not_run` 210이었다. 표본 스크립트는 판정 대상 310건 중 100건을 같은 seed로 같은 id로 뽑았다.
+- 아직 안 한 것: 실제 OpenAI 호출, 골든셋 평가(기준 6), 가중치 하한(기준 7), 310건 전체 판정, 규칙(SQ-3).
+- 표본 연결: 실행 API 본문에 `review_ids`를 받는다. `review_ids`는 필수이고 그 리뷰만 보낸다(중복은 합침). 생략·빈 목록·존재하지 않는 번호·상한(기본 100건) 초과는 422로 거절하고 아무것도 보내지 않는다. 파일럿에서는 `database/data/pilot_sample_ids.json`의 `review_ids`를 그대로 넣는다.
+- 실제 호출 전 조건(모두 끝나야 실행): ① prd.md Q-17-3과 G3 결정, ② 표본 100건에서 이름이 든 본문을 가려내고 목록에서 뺌(사용자), ③ OpenAI 데이터 사용·보관 조건 확인(사용자), ④ 프롬프트 `ad-v1` 초안을 몇 건 직접 보고 판정이 기대와 맞는지 검토(다르면 프롬프트를 고쳐 버전을 올림), ⑤ 시험 실행에서 동기 실행 시간이 요청 제한에 걸리는지 확인(걸리면 백그라운드 실행으로 바꿈).
+- 가정으로 둔 값: 묶음 크기 10건, 일시 오류 재시도 3회, 검증 실패 재시도 2회, 대기 1·2·4초, SDK 시간 제한 60초(모두 spec.md SQ-9 미정), 판정 실행 상한 100건, 표본 크기 100건과 seed 20251101.
 
 ### Phase 4: VOC 집계, 가중 토글, 판정 불가
 
