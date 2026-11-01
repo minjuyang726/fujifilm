@@ -39,21 +39,21 @@
 
 ## 3. Phase 개요
 
-| Phase | 이름 | 선행 | 소요(가정) | Git 저장점 |
-| --- | --- | --- | --- | --- |
-| 0a | 환경 준비 | 없음 | 4시간 | `phase-0a-scaffold` |
-| 0b | 리뷰 적재 | 0a | 4시간 | `phase-0b-reviews-loaded` |
-| 0c | 설문 구조와 합성 응답 적재 | 0a, G2 | 8시간 | `phase-0c-survey-synthetic` |
-| 0d | 네이버 글 수집·적재 (보류) | 0a, SQ-12 결정, 네이버 약관 확인 | 6시간 | `phase-0d-naver-loaded` |
-| 1 | 읽기 API와 오류·로그 기반 | 0b, 0c, G1 | 5시간 | `phase-1-read-api` |
-| 2 | 대시보드 설문 영역 | 1 | 6시간 | `phase-2-dashboard-survey` |
-| 3 | 광고성 판정과 파일럿 | 0b, G3 | 10시간 | `phase-3-ad-judgement-pilot` |
-| 4 | VOC 집계, 가중 토글, 판정 불가 | 2, 3, G4 | 8시간 | `phase-4-voc-weighted` |
-| 5 | 분석 스냅샷, 액션 제안, 근거 | 4 | 12시간 | `phase-5-suggestions-evidence` |
-| 6 | 문항 초안, 리포트, 내보내기 (폐루프 완주) | 5, G5 | 12시간 | `phase-6-closed-loop` |
-| 7 | n8n 정기 실행 연결 | 6 | 6시간 | `phase-7-n8n` |
-| 8 | 통합 점검 | 6, 7 | 6시간 | `phase-8-integration` |
-| 9 | 시연 준비 | 8 | 4시간 | `phase-9-demo-ready` |
+| Phase | 이름 | 선행 | 소요(가정) | Git 저장점 | 상태 |
+| --- | --- | --- | --- | --- | --- |
+| 0a | 환경 준비 | 없음 | 4시간 | `phase-0a-scaffold` | 구현 완료, 완료 기준 4번 대기(사용자 `.env`) |
+| 0b | 리뷰 적재 | 0a | 4시간 | `phase-0b-reviews-loaded` | 대기 |
+| 0c | 설문 구조와 합성 응답 적재 | 0a, G2 | 8시간 | `phase-0c-survey-synthetic` | 대기 |
+| 0d | 네이버 글 수집·적재 (보류) | 0a, SQ-12 결정, 네이버 약관 확인 | 6시간 | `phase-0d-naver-loaded` | 보류 |
+| 1 | 읽기 API와 오류·로그 기반 | 0b, 0c, G1 | 5시간 | `phase-1-read-api` | 대기 |
+| 2 | 대시보드 설문 영역 | 1 | 6시간 | `phase-2-dashboard-survey` | 대기 |
+| 3 | 광고성 판정과 파일럿 | 0b, G3 | 10시간 | `phase-3-ad-judgement-pilot` | 대기 |
+| 4 | VOC 집계, 가중 토글, 판정 불가 | 2, 3, G4 | 8시간 | `phase-4-voc-weighted` | 대기 |
+| 5 | 분석 스냅샷, 액션 제안, 근거 | 4 | 12시간 | `phase-5-suggestions-evidence` | 대기 |
+| 6 | 문항 초안, 리포트, 내보내기 (폐루프 완주) | 5, G5 | 12시간 | `phase-6-closed-loop` | 대기 |
+| 7 | n8n 정기 실행 연결 | 6 | 6시간 | `phase-7-n8n` | 대기 |
+| 8 | 통합 점검 | 6, 7 | 6시간 | `phase-8-integration` | 대기 |
+| 9 | 시연 준비 | 8 | 4시간 | `phase-9-demo-ready` | 대기 |
 
 - Phase 0d와 Phase 7은 컷 후보입니다(6절). 컷하면 Phase 8의 선행은 6만 남습니다.
 - Phase 7은 prd.md Q-4(리포트 생성 실행 방식)가 정해지지 않아서 담당자 화면이나 수동 호출로 대체할 수 있습니다.
@@ -77,6 +77,15 @@
 5. `git status`에 `.env`는 보이지 않고 `.env.example`은 보인다.
 
 **예상 소요** 4시간(가정) **선행** 없음. Supabase 프로젝트와 `DATABASE_URL`이 준비되어 있어야 한다(확인 필요 PQ-9) **저장점** `phase-0a-scaffold`
+
+**확인 결과** (2026-11-01, 구현 후 직접 실행)
+1. `uvicorn`으로 켜서 `http://localhost:8000/docs`가 HTTP 200으로 열렸다. `/openapi.json`도 200이고, 5173에서 오는 요청에 CORS 허용 헤더가 붙는다.
+2. `npm run dev`로 켜서 `http://localhost:5173/`이 HTTP 200으로 열렸다. `npm run build`와 `npm run lint`도 통과했다.
+3. `pytest`가 3개 모두 통과했다(SQLite). 경고 1건이 있다: starlette가 httpx 대신 httpx2 설치를 권장한다. 동작에는 영향이 없다.
+4. **Supabase 연결은 아직 확인하지 못했다.** `DATABASE_URL`이 없을 때 실패 메시지가 나오는 것만 확인했다. 사용자가 `backend/.env`를 채운 뒤 `backend` 폴더에서 `python scripts/check_db.py`를 실행해 결과를 알려 줘야 한다.
+5. `git status`에 `.env`는 없고 `backend/.env.example`, `frontend/.env.example`은 추적 대상으로 보인다. `backend/.env`, `frontend/.env`, 가상환경, `node_modules`, `dist`, `__pycache__`, `.pytest_cache`는 모두 무시된다.
+
+새로 만든 파일의 키·비밀번호 패턴 검사에서 일치한 2건은 테스트에 쓴 가짜 URL(`u:p@host`)이다. 실제 소요 시간은 사용자가 기록해 5.5절 보정 표에 넣는다.
 
 ### Phase 0b: 리뷰 적재
 

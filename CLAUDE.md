@@ -59,19 +59,22 @@
 
 ## 실행 명령
 
-spec.md와 plan.md에서 확정된 값은 아래와 같다. 이 프로젝트에는 아직 코드가 없어서(Phase 0a 전) 명령이 실제로 동작하는지는 구현 후 확인한다.
+Phase 0a에서 아래 명령을 실제로 실행해 확인했다. "확인 필요"는 아직 확인하지 못한 것이다. 명령은 Windows 기준이고, 가상환경을 켜지 않아도 `backend/.venv/Scripts/python.exe -m …` 형태로 실행할 수 있다.
 
 | 용도 | 명령 | 상태 |
 | --- | --- | --- |
-| backend 가상환경 | `backend/.venv` (Python 3.13) | 결정 |
-| backend 패키지 설치 | `pip install -r requirements.txt` (backend에서) | 결정 (`requirements.txt`) |
-| backend 실행 | `uvicorn app.main:app --reload --port 8000` (backend에서) | 포트 8000은 결정. 모듈 경로 `app.main:app`은 spec.md 2절의 `backend/app/main.py` 기준이며 Phase 0a에서 확인 필요 |
-| API 문서 화면 | `http://localhost:8000/docs` | 결정 (plan.md Phase 0a 확인 기준) |
-| 마이그레이션 적용 | `alembic upgrade head` (backend에서) | 도구는 결정(SQLAlchemy + Alembic). 설정 파일 위치는 확인 필요 |
-| 테스트 | `pytest` (backend에서) | 도구는 결정. 실행 위치와 옵션은 확인 필요 |
-| frontend 패키지 설치 | `npm install` (frontend에서) | 확인 필요 |
-| frontend 실행 | `npm run dev` (frontend에서), `http://localhost:5173` | 포트 5173은 결정(Vite). 스크립트 이름은 Vite 기본값 가정, 확인 필요 |
-| 적재 스크립트 | `backend/scripts/` | 파일 이름과 실행 방식은 확인 필요 |
+| backend 가상환경 만들기 | `python -m venv .venv` (backend에서), Python 3.13 | 확인됨 |
+| backend 가상환경 켜기 | PowerShell `.venv\Scripts\Activate.ps1`, Git Bash `source .venv/Scripts/activate` (backend에서) | 켜지 않고 `python.exe`를 직접 쓰는 방식만 확인. 켜는 명령은 확인 필요 |
+| backend 패키지 설치 | `pip install -r requirements.txt` (backend에서) | `requirements.txt` 작성함. 이 파일로 새로 설치하는 것은 확인 필요 |
+| backend 실행 | `uvicorn app.main:app --port 8000` (backend에서). 개발 중에는 `--reload` 추가 | `/docs`가 200으로 열리는 것을 확인함. `--reload`는 확인 필요 |
+| API 문서 화면 | `http://localhost:8000/docs` | 확인됨 |
+| backend 테스트 | `pytest` (backend에서). 설정은 `backend/pytest.ini` | 확인됨 (3개 통과, SQLite) |
+| Supabase 연결 확인 | `python scripts/check_db.py` (backend에서) | `DATABASE_URL`이 없을 때의 실패 메시지만 확인. 성공 경로는 사용자가 `backend/.env`를 채운 뒤 확인 필요 |
+| 마이그레이션 적용 | `alembic upgrade head` (backend에서). 설정은 `backend/alembic.ini`, `backend/migrations/` | 설정 로드(`alembic heads`)와 `DATABASE_URL` 없을 때의 실패 메시지만 확인. 적용은 테이블이 생기는 Phase 0b와 `DATABASE_URL`이 있어야 확인 가능 |
+| frontend 패키지 설치 | `npm install` (frontend에서) | 확인됨 |
+| frontend 실행 | `npm run dev` (frontend에서), `http://localhost:5173` | 확인됨 (포트 5173 고정) |
+| frontend 빌드·점검 | `npm run build`, `npm run lint` (frontend에서) | 확인됨 |
+| 적재 스크립트 | `backend/scripts/` | `check_db.py`만 있음. 적재 스크립트 이름과 실행 방식은 Phase 0b에서 정함 |
 | n8n | 워크플로 파일은 `backend/n8n/` | 기본안(설계 제안). 실행 방법은 확인 필요 |
 
-명령이 실제로 만들어진 뒤에는 이 표의 "확인 필요"를 확인된 값으로 고친다.
+환경 값은 `backend/.env`(비밀 값)와 `frontend/.env`(backend 주소만)에 넣는다. 항목 이름은 각 폴더의 `.env.example`에 있다.
