@@ -174,7 +174,7 @@ function ReviewStatsDemo() {
         setState({
           status: 'error',
           data: null,
-          message: 'backend에서 집계를 불러오지 못했습니다. 백엔드 서버가 켜져 있는지, 백엔드 설정이 맞는지 확인해 주세요.',
+          message: '백엔드에서 집계를 불러오지 못했습니다. 백엔드 서버가 켜져 있는지, 백엔드 설정이 맞는지 확인해 주세요.',
         })
       })
     return () => controller.abort()
