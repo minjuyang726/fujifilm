@@ -302,6 +302,7 @@ pipeline_run 1 ─ N ad_judgement | analysis_snapshot | report | llm_call_log
 | A-6 | GET | `/api/reports/{report_id}` | 없음 | 리포트 (아래) | 200, 404, 422, 500 | FR-3.1~3.4 |
 | A-7 | GET | `/api/reports/{report_id}/export` | 쿼리 `format`(필수) | 독립형 HTML 파일 본문(기본안, 설계 제안). 근거는 문장마다 건수만 적는다(기본안). 형식은 확인 필요 SQ-14 | 200, 400, 404, 422, 500 | FR-3.5 |
 | A-10 | GET | `/api/suggestions/{suggestion_id}/evidence` | 쿼리 `page`(정수, 기본 1), `page_size`(정수), `kind`(선택: `review` 또는 `survey`) | `{total, page, page_size, items: [{kind, evidence_id, rating, date}]}`. `rating`과 `date`는 리뷰 항목에만 있다. 정렬은 `evidence_id` 오름차순(설계 제안). 설문 항목의 필드는 확인 필요 SQ-5 | 200, 404, 422, 500 | FR-2.2, FR-2.6 |
+| A-11(데모 전용, 부록 A 참조) | GET | `/api/demo/review-stats` | 없음 | `products`: 상품별 `{product_name, review_count, rating_distribution: [{rating, count}], with_text_count, with_text_ratio}`, `quarters`: 리뷰 달력 분기별 `{quarter, count}`, `total`. 응답에는 집계 숫자만 있고 리뷰 본문, 제목, `author`는 없다. 경로와 필드 이름은 설계 제안이며 구현 때 확정(확인 필요) | 200, 500 | plan.md 부록 A (본 설계의 FR이 아님) |
 
 **A-3 응답 (대시보드)**
 
