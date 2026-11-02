@@ -1,11 +1,44 @@
+import { useState } from 'react'
+import Dashboard from './Dashboard.jsx'
 import ReviewStatsDemo from './ReviewStatsDemo.jsx'
 
+// 화면 두 개를 탭으로 오간다(라우터를 쓰지 않는다). 기본은 제품군 대시보드(S-2)이고,
+// 포트폴리오 데모(plan.md 부록 A)는 내용을 바꾸지 않고 그대로 둔다.
+const TABS = [
+  { id: 'dashboard', label: '제품군 대시보드' },
+  { id: 'demo', label: '쿠팡 리뷰 집계 (포트폴리오 데모)' },
+]
+
 function App() {
+  const [tab, setTab] = useState('dashboard')
   return (
     <main className="demo-page">
-      <h1>쿠팡 리뷰 집계 (포트폴리오 데모)</h1>
-      <p className="note">읽기 전용 · 집계 숫자만 표시 · 리뷰 본문, 제목, 작성자는 보여 주지 않습니다</p>
-      <ReviewStatsDemo />
+      <nav className="tabs" aria-label="화면 선택">
+        {TABS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={item.id === tab ? 'tab active' : 'tab'}
+            aria-current={item.id === tab ? 'page' : undefined}
+            onClick={() => setTab(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
+      {tab === 'dashboard' ? (
+        <>
+          <h1>제품군 대시보드</h1>
+          <p className="note">읽기 전용 · 설문은 합성 응답 · 외부 VOC는 준비 중</p>
+          <Dashboard />
+        </>
+      ) : (
+        <>
+          <h1>쿠팡 리뷰 집계 (포트폴리오 데모)</h1>
+          <p className="note">읽기 전용 · 집계 숫자만 표시 · 리뷰 본문, 제목, 작성자는 보여 주지 않습니다</p>
+          <ReviewStatsDemo />
+        </>
+      )}
     </main>
   )
 }
