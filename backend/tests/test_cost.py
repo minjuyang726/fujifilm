@@ -20,11 +20,11 @@ PRICES = Prices(input_per_m=0.20, output_per_m=1.20)
 
 def test_calibration_constants_are_the_documented_ones():
     assert CALIBRATION == Calibration(
-        fixed_input_tokens=611,  # 311(ad-v1 실측) + 300(ad-v2 임시 여유)
+        fixed_input_tokens=470,  # 파일럿 10개 묶음 회귀 절편 714 기준, 임시 여유 +300 제거
         item_overhead_tokens=30,
         tokens_per_char=0.80,
         output_tokens_per_call=20,
-        output_tokens_per_item=40,
+        output_tokens_per_item=50,
         retry_multiplier=3,
     )
 
@@ -41,16 +41,17 @@ def test_token_cost_matches_the_hand_calculation_of_the_trial_call():
 def test_estimate_for_a_pilot_of_100_items_all_at_the_longest_length():
     estimate = estimate_ad_cost([968] * 100, 10, PRICES)
     assert estimate.items == 100 and estimate.calls == 10
-    # 입력 = 10 × 611 + 100 × ceil(30 + 0.80 × 968) = 6,110 + 80,500 = 86,610, 출력 = 10 × 20 + 100 × 40 = 4,200
-    assert (estimate.input_tokens, estimate.output_tokens) == (86_610, 4_200)
-    assert estimate.one_pass_usd == pytest.approx(0.022362, rel=1e-6)
-    assert estimate.upper_usd == pytest.approx(0.067086, rel=1e-6)
+    # 입력 = 10 × 470 + 100 × ceil(30 + 0.80 × 968) = 4,700 + 80,500 = 85,200, 출력 = 10 × 20 + 100 × 50 = 5,200
+    assert (estimate.input_tokens, estimate.output_tokens) == (85_200, 5_200)
+    # 85,200 × 0.20 / 1e6 + 5,200 × 1.20 / 1e6 = 0.01704 + 0.00624 = 0.02328, 재시도 배수 3 -> 0.06984
+    assert estimate.one_pass_usd == pytest.approx(0.02328, rel=1e-6)
+    assert estimate.upper_usd == pytest.approx(0.06984, rel=1e-6)
 
 
 def test_estimate_uses_the_longest_item_for_every_item_and_the_sum_is_only_a_reference():
     estimate = estimate_ad_cost([10, 10, 1000], 10, PRICES)
     longest = 30 + 0.80 * 1000
-    assert estimate.input_tokens == 611 + 3 * longest
+    assert estimate.input_tokens == 470 + 3 * longest
     assert estimate.sum_based_upper_usd < estimate.upper_usd
 
 
