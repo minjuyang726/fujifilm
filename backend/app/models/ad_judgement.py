@@ -18,7 +18,7 @@ from app.models.base import Base
 class AdJudgement(Base):
     """리뷰 한 건의 광고성 판정. 글은 삭제하지 않고 가중치만 낮춘다(FR-1.6).
 
-    weight_floor_used와 rule_signals(spec.md 3.2절)는 하한(Q-7)과 규칙(SQ-3)이 정해질 때 추가한다.
+    weight_floor_used와 rule_signals(spec.md 3.2절)는 구현하지 않았다. 하한은 집계 시점에 적용한다(Q-7).
     """
 
     __tablename__ = "ad_judgement"

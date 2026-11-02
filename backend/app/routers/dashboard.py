@@ -1,13 +1,15 @@
-"""A-3(대시보드 API). Phase 2는 설문 부분만 돌려준다. 읽기 전용이다."""
+"""A-3(대시보드 API): 설문(Phase 2)과 외부 VOC(Phase 4). 읽기 전용이다."""
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.config import VOC_SMALL_SAMPLE_THRESHOLD, get_settings
 from app.db import get_session
 from app.models import ProductFamily, Round
 from app.routers.read import TEMP_ROUND_PREFIX
 from app.schemas.dashboard import DashboardResponse
 from app.services.dashboard import survey_section
+from app.services.voc import voc_section
 
 router = APIRouter(prefix="/api", tags=["dashboard"])
 
@@ -30,4 +32,11 @@ def get_dashboard(family_id: int, round_id: int, session: Session = Depends(get_
         "family": {"family_id": family.family_id, "name": family.name},
         "round": {"round_id": round_row.round_id, "label": round_row.label},
         "survey": survey_section(session, round_row.round_id),
+        "voc": voc_section(
+            session,
+            family.family_id,
+            round_row,
+            weight_floor=get_settings().ad_weight_floor,
+            small_sample_threshold=VOC_SMALL_SAMPLE_THRESHOLD,
+        ),
     }

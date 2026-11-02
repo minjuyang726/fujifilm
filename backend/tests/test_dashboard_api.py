@@ -42,7 +42,7 @@ def test_dashboard_returns_family_round_and_survey_only(api, session):
     response = api.get(f"/api/families/1/dashboard?round_id={rid}")
     assert response.status_code == 200 and response.headers["x-request-id"]
     body = response.json()
-    assert set(body) == {"family", "round", "survey"}  # voc는 Phase 4
+    assert set(body) == {"family", "round", "survey", "voc"}
     assert body["family"] == {"family_id": 1, "name": "일회용 카메라"}
     assert body["round"] == {"round_id": rid, "label": "2026-Q1"}
     survey = body["survey"]
