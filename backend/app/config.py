@@ -1,7 +1,7 @@
 """환경 값 읽기. 값은 backend/.env 또는 환경 변수에서 온다."""
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -20,9 +20,10 @@ DEFAULT_AD_JUDGEMENT_MAX_ITEMS = 100
 
 @dataclass(frozen=True)
 class Settings:
-    database_url: str | None
+    # repr에서 뺀다. 설정 객체를 로그나 오류 출력에 그대로 찍어도 접속 문자열과 키가 나오지 않게 한다.
+    database_url: str | None = field(repr=False)
     cors_origins: list[str]
-    openai_api_key: str | None
+    openai_api_key: str | None = field(repr=False)
     openai_model_ad: str | None
     ad_judgement_max_items: int
 
