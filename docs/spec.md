@@ -112,7 +112,7 @@ fujifilm/
 | 열 | 형식 | 비고 |
 | --- | --- | --- |
 | product_name | 텍스트, 기본 키 | 쿠팡 CSV의 상품명 3개 |
-| family_id | FK → product_family, NULL 허용 | 제품군이 정해지기 전에는 NULL |
+| family_id | FK → product_family, NULL 허용 | 제품군이 정해지기 전에는 NULL. 구현됨(마이그레이션 `4d7cdf97c911`). 값은 `scripts/seed_families.py`가 채우며, 대응은 상품명이 근거이고 대응표에 없는 상품은 NULL로 둔다 |
 
 **review (쿠팡 리뷰)**
 
@@ -294,7 +294,7 @@ pipeline_run 1 ─ N ad_judgement | analysis_snapshot | report | llm_call_log
 
 | 번호 | 메서드 | 경로 | 요청 | 응답 | 상태 코드 | 요구사항 |
 | --- | --- | --- | --- | --- | --- | --- |
-| A-1 | GET | `/api/families` | 없음 | `families`: 제품군 목록 `{family_id, name}` | 200, 500 | FR-1.1 |
+| A-1 | GET | `/api/families` | 없음 | `families`: 제품군 목록 `{family_id, name}` (`family_id` 오름차순, 구현에서 정함. 시드 전에는 빈 목록) | 200, 500 | FR-1.1 |
 | A-2 | GET | `/api/rounds` | 없음 | `rounds`: 회차 목록 `{round_id, label, period_start, period_end}`. label이 `[파일럿-임시]`로 시작하는 행은 목록에서 뺀다 (결정 2026-11-03, 사용자 승인) | 200, 500 | FR-1.3 |
 | A-3 | GET | `/api/families/{family_id}/dashboard` | 쿼리 `round_id`(정수, 필수) | 대시보드 (아래) | 200, 400, 404, 422, 500 | FR-1.2~1.10 |
 | A-4 | GET | `/api/evidence/{kind}/{evidence_id}` | 경로 `kind`(`review` 또는 `survey`), `evidence_id`(정수) | 근거 (아래) | 200, 404, 422, 500 | FR-2.2, FR-2.5 |
@@ -329,7 +329,7 @@ pipeline_run 1 ─ N ad_judgement | analysis_snapshot | report | llm_call_log
 
 | kind | 필드 | 비고 |
 | --- | --- | --- |
-| `review` | `kind`, `review_id`, `rating`, `date`, `review_text`, `text_source` | FR-2.5. `review_text`가 비어 있으면 `title` 값을 `review_text` 자리에 넣고 `text_source`를 `title`로 한다(`text_source`는 `review_text` 또는 `title`). 기본안이며 설계 제안이다(확인 필요 SQ-15). 그 밖의 `title`과 `author`, `variant`는 담지 않는다 |
+| `review` | `kind`, `review_id`, `rating`, `date`, `review_text`, `text_source` | FR-2.5. `review_text`가 비어 있으면 `title` 값을 `review_text` 자리에 넣고 `text_source`를 `title`로 한다(`text_source`는 `review_text` 또는 `title`). 기본안이며 설계 제안이다(확인 필요 SQ-15). 그 밖의 `title`과 `author`, `variant`는 담지 않는다. **구현에서 정함 (Phase 1)**: 제목과 본문이 모두 없는 글은 200으로 `review_text`와 `text_source`를 null로 돌려준다. `kind=survey`는 Phase 1 범위 밖이라 400 `BAD_REQUEST`로 거절한다 |
 | `survey` | `kind`, `response_id`, `synthetic_label`, `round`, `answers: [{question_text, value}]` | 합성 응답이면 `synthetic_label`이 `"합성"`. 필드는 설문 구조를 확인한 뒤 확정(확인 필요 SQ-5) |
 
 **A-6 응답 (리포트)**
@@ -508,6 +508,13 @@ LLM 출력은 아래 순서로 코드가 검증합니다. 통과하지 못한 �
 
 - 500 응답에는 스택 추적이나 DB 문장을 담지 않습니다. 자세한 내용은 로그에만 남깁니다.
 - LLM 실패는 HTTP 오류가 아니라 실행 기록(A-9)의 `status`와 `error_code`로 알립니다.
+
+**구현에서 정함 (Phase 1, 2026-11-03)** — 위 표와 7.3에 정해지지 않았던 부분을 가장 보수적으로 정했다.
+- `request_id`는 서버가 요청마다 `uuid4` 16진수 32자로 새로 만든다. 요청 헤더로 들어온 값은 쓰지 않는다. 응답 헤더 `X-Request-ID`와 오류 본문 `error.request_id`가 같은 값이다(오류가 아닌 응답에도 헤더가 붙는다).
+- `error.details`는 422일 때 `[{field, reason}]`이다. `field`는 위치(예: `path.evidence_id`), `reason`은 FastAPI 검증 메시지이고 입력 값은 담지 않는다.
+- 표에 없는 405는 `METHOD_NOT_ALLOWED`로 낸다. 업무 규칙 오류의 `error.code`는 서비스가 정한 코드를 그대로 쓴다(예: 판정 실행의 `TOO_MANY_REVIEWS`, `COST_LIMIT_EXCEEDED`). 그래서 `error.code`가 위 표의 예 밖일 수 있다.
+- 기존 판정 실행 API(`POST /api/rounds/{round_id}/pipeline/ad-judgement`, `GET /api/runs/{run_id}`)도 같은 형식으로 바뀌었다. 이전에는 `{"detail": {code, message}}`였다.
+- 로그 파일은 `backend/logs/app.log`이고 자정마다 나누어 7일 보관한다(SQ-16 기본안을 그대로 쓴 것이며 결정이 아니다). 요청마다 `event: request` 한 줄(`method`, `path`, `status`, `duration_ms`)을 남기고 쿼리 문자열과 본문은 남기지 않는다. 처리되지 않은 예외는 `event: unhandled_error`로 예외 종류(`error_type`)와 위치(`location`: 파일·줄·함수)만 남기고 예외 메시지는 남기지 않는다(메시지에 SQL이나 접속 정보가 들어갈 수 있음).
 
 ### 7.2 처리 위치
 
