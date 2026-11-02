@@ -192,7 +192,7 @@ def test_missing_round_is_404_and_creates_no_run(seeded, session_factory):
     api = make_api(session_factory, EchoClient())
     response = api.post("/api/rounds/999/pipeline/ad-judgement", json=ALL)
     assert response.status_code == 404
-    assert response.json()["detail"]["code"] == "NOT_FOUND"
+    assert response.json()["error"]["code"] == "NOT_FOUND"
     seeded.expire_all()
     assert count(seeded, PipelineRun) == 0
 
@@ -266,7 +266,7 @@ def test_unknown_review_id_is_rejected_as_a_whole(seeded, session_factory):
     api = make_api(session_factory, client)
     response = api.post("/api/rounds/1/pipeline/ad-judgement", json={"review_ids": [1, 2, 999]})
     assert response.status_code == 422
-    assert response.json()["detail"]["code"] == "UNKNOWN_REVIEW_IDS"
+    assert response.json()["error"]["code"] == "UNKNOWN_REVIEW_IDS"
     assert "999" not in response.text
     assert client.calls == []
     seeded.expire_all()
@@ -278,7 +278,7 @@ def test_review_ids_over_the_cap_are_rejected_not_cut(seeded, session_factory, m
     client = EchoClient()
     api = make_api(session_factory, client)
     response = api.post("/api/rounds/1/pipeline/ad-judgement", json={"review_ids": [1, 2, 3]})
-    assert response.status_code == 422 and response.json()["detail"]["code"] == "TOO_MANY_REVIEWS"
+    assert response.status_code == 422 and response.json()["error"]["code"] == "TOO_MANY_REVIEWS"
     assert client.calls == []
 
 
@@ -292,7 +292,7 @@ def test_missing_model_name_is_a_clear_500_and_creates_no_run(seeded, session_fa
     api = make_api(session_factory, EchoClient(), model=None)  # 모델 의존성을 대체하지 않는다 -> 환경 값 없음
     response = api.post("/api/rounds/1/pipeline/ad-judgement", json=ALL)
     assert response.status_code == 500
-    assert response.json()["detail"]["code"] == "MODEL_NOT_CONFIGURED"
+    assert response.json()["error"]["code"] == "MODEL_NOT_CONFIGURED"
     seeded.expire_all()
     assert count(seeded, PipelineRun) == 0
 
@@ -301,7 +301,7 @@ def test_default_client_without_openai_key_is_a_clear_500(seeded, session_factor
     api = make_api(session_factory, client=None)  # 기본 클라이언트 사용, 키 없음
     response = api.post("/api/rounds/1/pipeline/ad-judgement", json=ALL)
     assert response.status_code == 500
-    assert response.json()["detail"]["code"] == "LLM_NOT_CONFIGURED"
+    assert response.json()["error"]["code"] == "LLM_NOT_CONFIGURED"
     assert "OPENAI_API_KEY" not in response.text or "설정" in response.text
     seeded.expire_all()
     assert count(seeded, PipelineRun) == 0
@@ -324,7 +324,7 @@ def test_missing_price_is_a_500_and_nothing_is_sent_or_recorded(seeded, session_
     client = EchoClient()
     response = make_api(session_factory, client).post("/api/rounds/1/pipeline/ad-judgement", json=ALL)
     assert response.status_code == 500
-    assert response.json()["detail"]["code"] == "PRICE_NOT_CONFIGURED"
+    assert response.json()["error"]["code"] == "PRICE_NOT_CONFIGURED"
     assert client.calls == []
     seeded.expire_all()
     assert count(seeded, PipelineRun) == 0 and count(seeded, AdJudgement) == 0
@@ -335,7 +335,7 @@ def test_estimate_over_the_limit_is_a_422_before_any_call_and_creates_no_run(see
     client = EchoClient()
     response = make_api(session_factory, client).post("/api/rounds/1/pipeline/ad-judgement", json=ALL)
     assert response.status_code == 422
-    assert response.json()["detail"]["code"] == "COST_LIMIT_EXCEEDED"
+    assert response.json()["error"]["code"] == "COST_LIMIT_EXCEEDED"
     for forbidden in (SECRET_TEXT, SECRET_TITLE):
         assert forbidden not in response.text
     assert client.calls == []

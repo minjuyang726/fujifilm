@@ -1,7 +1,7 @@
 """A-8(단계 실행)과 A-9(실행 조회). 이 단계는 지금 서버가 요청 안에서 끝까지 실행하고 결과를 돌려준다.
 
 백그라운드 실행(spec.md 4.3절)은 실제 LLM 호출을 붙일 때 정한다.
-오류 응답의 통일된 형식(spec.md 7.1절)은 Phase 1에서 만든다. 지금은 detail에 code와 message를 담는다.
+업무 규칙 오류는 detail에 code와 message를 담아 내고, 응답 형식(spec.md 7.1절)은 app/core/errors.py가 통일한다.
 """
 
 from collections.abc import Callable
