@@ -20,9 +20,9 @@ PRICES = Prices(input_per_m=0.20, output_per_m=1.20)
 
 def test_calibration_constants_are_the_documented_ones():
     assert CALIBRATION == Calibration(
-        fixed_input_tokens=326,
+        fixed_input_tokens=311,
         item_overhead_tokens=30,
-        tokens_per_char=2.0,
+        tokens_per_char=0.80,
         output_tokens_per_call=20,
         output_tokens_per_item=40,
         retry_multiplier=3,
@@ -41,16 +41,16 @@ def test_token_cost_matches_the_hand_calculation_of_the_trial_call():
 def test_estimate_for_a_pilot_of_100_items_all_at_the_longest_length():
     estimate = estimate_ad_cost([968] * 100, 10, PRICES)
     assert estimate.items == 100 and estimate.calls == 10
-    # 입력 = 10 × 326 + 100 × ceil(30 + 2.0 × 968) = 199,860, 출력 = 10 × 20 + 100 × 40 = 4,200
-    assert (estimate.input_tokens, estimate.output_tokens) == (199_860, 4_200)
-    assert estimate.one_pass_usd == pytest.approx(0.045012, rel=1e-6)
-    assert estimate.upper_usd == pytest.approx(0.135036, rel=1e-6)
+    # 입력 = 10 × 311 + 100 × ceil(30 + 0.80 × 968) = 3,110 + 80,500 = 83,610, 출력 = 10 × 20 + 100 × 40 = 4,200
+    assert (estimate.input_tokens, estimate.output_tokens) == (83_610, 4_200)
+    assert estimate.one_pass_usd == pytest.approx(0.021762, rel=1e-6)
+    assert estimate.upper_usd == pytest.approx(0.065286, rel=1e-6)
 
 
 def test_estimate_uses_the_longest_item_for_every_item_and_the_sum_is_only_a_reference():
     estimate = estimate_ad_cost([10, 10, 1000], 10, PRICES)
-    longest = 30 + 2.0 * 1000
-    assert estimate.input_tokens == 326 + 3 * longest
+    longest = 30 + 0.80 * 1000
+    assert estimate.input_tokens == 311 + 3 * longest
     assert estimate.sum_based_upper_usd < estimate.upper_usd
 
 
@@ -79,6 +79,20 @@ def test_guard_adds_real_tokens_and_uses_the_fallback_when_tokens_are_missing():
     assert fallback.exceeded
 
 
+def test_estimate_stays_above_the_measured_trial_batch():
+    # 2026-11-02 시험 호출 #2: 한국어 가짜 문장 10건(글자 수 아래), 실측 입력 1,254 / 출력 316토큰
+    estimate = estimate_ad_cost([50] * 7 + [60, 80, 910], 10, PRICES)
+    assert estimate.input_tokens >= 1254
+    assert estimate.output_tokens >= 316
+    assert estimate.one_pass_usd >= token_cost_usd(1254, 316, PRICES)
+
+
+OLD_CALIBRATION = Calibration(
+    fixed_input_tokens=326, item_overhead_tokens=30, tokens_per_char=2.0,
+    output_tokens_per_call=20, output_tokens_per_item=40, retry_multiplier=3,
+)
+
+
 def test_suggestion_takes_the_largest_conservative_values():
     samples = [
         # (3260 - 326 - 10 * 30) / 1300 = 2.0, (180 - 20) / 10 = 16
@@ -87,7 +101,7 @@ def test_suggestion_takes_the_largest_conservative_values():
         CallSample(items=3, chars=100, input_tokens=700, output_tokens=80),
         CallSample(items=0, chars=0, input_tokens=326, output_tokens=20),  # 쓸 수 없는 표본은 건너뛴다
     ]
-    suggestion = suggest_calibration(samples)
+    suggestion = suggest_calibration(samples, OLD_CALIBRATION)  # 계산 예시를 고정하려고 이전 계수를 명시한다
     assert suggestion.tokens_per_char == 2.84
     assert suggestion.output_tokens_per_item == 20
     assert suggestion.samples_used == 2
