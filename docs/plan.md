@@ -43,7 +43,7 @@
 | --- | --- | --- | --- | --- | --- |
 | 0a | 환경 준비 | 없음 | 4시간 | `phase-0a-scaffold` | 완료 (2026-11-01, 완료 확인 기준 1~5 통과) |
 | 0b | 리뷰 적재 | 0a | 4시간 | `phase-0b-reviews-loaded` | 완료 (2026-11-01, 완료 확인 기준 1~6 통과) |
-| 0c | 설문 구조와 합성 응답 적재 | 0a, G2 | 8시간 | `phase-0c-survey-synthetic` | 0c-0·0c-1·0c-2 완료(2026-11-03), 0c-3(적재)·0c-4(검증) 대기 |
+| 0c | 설문 구조와 합성 응답 적재 | 0a, G2 | 8시간 | `phase-0c-survey-synthetic` | 완료(2026-11-03, 0c-0~0c-4, 완료 확인 기준 1~5 통과) |
 | 0d | 네이버 글 수집·적재 (보류) | 0a, SQ-12 결정, 네이버 약관 확인 | 6시간 | `phase-0d-naver-loaded` | 보류 |
 | 1 | 읽기 API와 오류·로그 기반 | 0b, 0c, G1 | 5시간 | `phase-1-read-api` | 대기 |
 | 2 | 대시보드 설문 영역 | 1 | 6시간 | `phase-2-dashboard-survey` | 대기 |
@@ -152,7 +152,21 @@
   - 0c-0 선행 결정: 완료.
   - 0c-1 테이블·마이그레이션: 완료. revision `c50a52659d39`(`survey_question`, `survey_response`, `survey_answer`, `product_family`). 임시 SQLite에서 `alembic upgrade head`, `alembic check`, 한 단계 downgrade 후 재upgrade를 확인했다. **Supabase에는 적용하지 않았다**(사용자가 실행하고 확인한다).
   - 0c-2 합성 생성기·적재 스크립트: 완료. `scripts/generate_synthetic_survey.py`, `scripts/load_synthetic_survey.py`. 임시 SQLite에서 적재와 반복 실행의 멱등성을 확인했다. 실제 DB 적재는 하지 않았다.
-  - 0c-3 적재(Supabase): 대기. 0c-4 검증(Table Editor): 대기.
+  - 0c-3 적재(Supabase): 완료. 0c-4 검증: 완료(아래 기록). 검증은 읽기 전용 SQL로 했고 Table Editor 육안 확인은 사용자가 한다.
+  - **0c-3·0c-4 실행 기록(2026-11-03, KST, 실측)**. `alembic upgrade head`는 사용자가 실행했다(실행 시각은 확인 못 함, 사전 확인 때 `alembic_version`이 `c50a52659d39`였다).
+    - 사전 확인(00:34:30, 읽기만): `alembic_version` `c50a52659d39`. 4개 테이블 존재, `relrowsecurity` 모두 참(`product_family`, `survey_question`, `survey_response`, `survey_answer`). 적재 전: round 1행(round_id 1 `[파일럿-임시] 2026-11-02`), `pipeline_run` 2, `ad_judgement` 100, 설문 4개 테이블 모두 0.
+    - 1차 적재 00:34:55~00:34:56(`python scripts/load_synthetic_survey.py`): round 2(upsert), `survey_question` 20, `survey_response` 200, `survey_answer` 2,081. 2차 적재 00:35:15~00:35:16: 같은 건수.
+    - 검증 항목 1~9 (1차 적재 후 00:35:04, 2차 적재 후 같은 항목을 다시 조회했고 8번의 `response_id` 최댓값과 9번의 `question_id`를 뺀 모든 값이 같았다):
+      1. `survey_response` 전체 200, 2026-Q1 100 / 2026-Q2 100, `is_synthetic` 거짓 0.
+      2. `round` 전체 3, `[파일럿-임시]` 접두어 1, 접두어 제외 2. 임시 행은 round_id 1, label `[파일럿-임시] 2026-11-02` 그대로. 회차 행은 round_id 2 `2026-Q1`, round_id 3 `2026-Q2`.
+      3. `pipeline_run` 2, `ad_judgement` 100(적재 전과 같음).
+      4. `survey_question` 20, 회차별 10, 코드 q01~q10이 회차마다 한 번씩, 유형은 q01~q05 scale5 / q06·q07·q09·q10 single / q08 multi.
+      5. `family_id` NULL 200.
+      6. 문항별 선택지 건수를 DB에서 집계해 `database/data/synthetic_survey.json`을 파이썬으로 집계한 값과 비교: 다른 칸 0. 이 집계는 2026-11-03 코드 보고서 표와도 다른 칸이 없다. 비다중 문항은 회차당 답 100개, q08은 2026-Q1 131행 / 2026-Q2 150행.
+      7. `survey_answer` 합계 2,081(2026-Q1 1,031 + 2026-Q2 1,050).
+      8. 2차 적재 후 `survey_answer` 2,081 / `survey_response` 200 / `survey_question` 20으로 1차와 같고, `response_id` 최댓값만 200 → 400으로 커졌다.
+      9. q09의 `question_id`와 `round_id`: 1차 적재 후 2026-Q1은 round_id 2 / question_id 9, 2026-Q2는 round_id 3 / question_id 19. **2차 적재 후(현재 상태)** 2026-Q1은 round_id 2 / question_id 29, 2026-Q2는 round_id 3 / question_id 39. 재삽입 방식이라 적재할 때마다 `question_id`와 `response_id`가 바뀐다.
+    - 확인 못 함: Table Editor 화면에서 본 값과의 일치(사용자 확인), 적재 스크립트를 쓰지 않은 직접 SQL 대조 외의 독립 확인. 어긋난 항목은 없다.
   - 결정: type 값은 `scale5` / `single` / `multi`, `survey_answer.value`는 문자열(선택지 코드)이고 다중선택은 선택 하나당 1행, `options_json`은 `[{"code", "label"}, …]` 순서 유지, `survey_question`에 UNIQUE(round_id, code), 문항 10개를 두 회차에 똑같이(20행), q08(다중선택)의 마지막 선택지는 "개선할 점 없음"이며 이를 고르면 다른 선택지는 고를 수 없고 다중선택은 최소 1개. 합성 응답은 회차당 100건(총 200건), 모두 `is_synthetic` 참, `family_id` NULL. 회차 행은 label `2026-Q1`, `2026-Q2`(기간 SQ-6). `product_family` 테이블은 같은 마이그레이션에 만들었고 시드는 없다(Phase 1). (결정 2026-11-03, 사용자 승인)
   - **합성 생성기 seed: `20261103`** (코드 상수 `SEED`, `app/services/synthetic_survey.py`). 같은 seed로 두 번 만든 파일의 sha256이 같다.
   - **합성 데이터의 성격: 임의 설정, 시연용, 성과로 쓰지 않음.** 문항 문구, 선택지, 확률표는 새로 정한 임의 값이고 KOSSDA의 문항 내용·변수명·라벨·응답자 값, 실제 리뷰나 판정 통계에서 가져오거나 맞추지 않았다. 문항별로 독립 추출하며 상관 구조는 없다. 다중선택은 먼저 "개선할 점 없음"을 확률 0.20으로 고르고, 아니면 나머지 4개를 각각 독립 확률로 고르며, 아무것도 안 골라지면 가중치로 하나를 고른다.

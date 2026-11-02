@@ -76,6 +76,8 @@ Phase 0a에서 아래 명령을 실제로 실행해 확인했다. "확인 필요
 | frontend 빌드·점검 | `npm run build`, `npm run lint` (frontend에서) | 확인됨 |
 | 리뷰 적재 | `python scripts/load_reviews.py` (backend에서). CSV만 점검하려면 `--check-only` | 임시 SQLite에서 확인함(1,302행, 두 번 실행해도 그대로). Supabase 실행은 사용자가 한 뒤 확인 필요 |
 | 파일럿 표본 뽑기 | `python scripts/pilot_sample.py` (backend에서). 층화는 `--stratify product` | 임시 SQLite에서 확인함(310건 중 100건, 같은 seed면 같은 id). DB에서 읽기만 함. 결과는 `database/data/pilot_sample_ids.json`(추적 안 됨) |
+| 합성 설문 생성 | `python scripts/generate_synthetic_survey.py` (backend에서). `--out`으로 경로 변경 | 파일만 만든다(DB·네트워크 안 씀). 같은 seed로 두 번 만든 `database/data/synthetic_survey.json`의 sha256이 같음을 확인함(2026-11-03). 파일은 추적 안 됨 |
+| 합성 설문 적재 | `python scripts/load_synthetic_survey.py` (backend에서). 파일만 점검하려면 `--check-only` | 임시 SQLite(pytest)와 Supabase에서 확인함(2026-11-03, 두 번 실행해도 행이 늘지 않음). 실행 전에 `alembic upgrade head`가 필요하고 사용자가 실행한다. `[파일럿-임시]` 회차와 `is_synthetic`이 거짓인 행은 건드리지 않는다 |
 | 광고성 판정 실행 | `POST /api/rounds/{round_id}/pipeline/ad-judgement`, `GET /api/runs/{run_id}` (`/docs` 화면에서) | 가짜 클라이언트로만 확인함. 본문의 `review_ids`는 필수이고 파일럿은 표본의 `review_ids`를 넣는다. 실제 실행에는 `backend/.env`의 `OPENAI_API_KEY`, `OPENAI_MODEL_AD`와 `round` 행 하나가 필요하다. 리뷰 데이터를 보내는 실제 호출은 prd.md Q-17-3과 G3 전에는 하지 않는다. 리뷰가 아닌 임의 문장의 시험 호출은 사용자가 허용한 횟수 안에서 예외다 |
 | n8n | 워크플로 파일은 `backend/n8n/` | 기본안(설계 제안). 실행 방법은 확인 필요 |
 
