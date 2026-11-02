@@ -5,7 +5,7 @@ from app.config import get_settings
 from app.core.errors import register_error_handlers
 from app.core.logging import setup_logging
 from app.core.middleware import REQUEST_ID_HEADER, RequestIdMiddleware
-from app.routers import demo, pipeline, read
+from app.routers import dashboard, demo, pipeline, read
 
 settings = get_settings()
 
@@ -27,3 +27,4 @@ register_error_handlers(app)
 app.include_router(pipeline.router)
 app.include_router(demo.router)
 app.include_router(read.router)
+app.include_router(dashboard.router)
