@@ -352,3 +352,57 @@ code {
   overflow: hidden;
   clip-path: inset(50%);
 }
+
+/* S-2 외부 VOC 영역 (plan.md Phase 4) */
+.mode-toggle {
+  display: inline-flex;
+  gap: 16px;
+  align-items: center;
+  margin: 12px 0 4px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.mode-toggle legend {
+  font-size: 13px;
+  padding: 0 6px;
+  color: var(--text-h);
+}
+
+.mode-toggle label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 15px;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.voc-group {
+  margin-top: 20px;
+  text-align: left;
+}
+
+.voc-group h3 {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-h);
+  margin: 0 0 4px;
+}
+
+.badge-small {
+  background: transparent;
+  border-style: dashed;
+}
+
+.summary-table {
+  max-width: 420px;
+  margin-bottom: 12px;
+}
+
+.bar-ratio {
+  display: block;
+  font-size: 12px;
+  margin-top: 2px;
+}

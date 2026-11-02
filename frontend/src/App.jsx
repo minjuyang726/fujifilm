@@ -29,7 +29,7 @@ function App() {
       {tab === 'dashboard' ? (
         <>
           <h1>제품군 대시보드</h1>
-          <p className="note">읽기 전용 · 설문은 합성 응답 · 외부 VOC는 준비 중</p>
+          <p className="note">읽기 전용 · 설문은 합성 응답 · 외부 VOC는 판정된 글 기준</p>
           <Dashboard />
         </>
       ) : (

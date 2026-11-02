@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ApiError, errorMessage, getJson } from './api.js'
+import Voc from './Voc.jsx'
 
-// S-2 제품군 대시보드의 골격(plan.md Phase 2, 얇은 범위): 제품군·회차 선택, 설문 집계, VOC 영역 자리.
+// S-2 제품군 대시보드(plan.md Phase 2·4): 제품군·회차 선택, 설문 집계, 외부 VOC 집계.
 // 설문은 제품군과 무관한 공통 설문이고 합성 응답이다(SQ-5, FR-1.10, NFR-S3). 집계는 항상 비가중이다(FR-1.9).
 const formatCount = (value) => value.toLocaleString('ko-KR')
 const formatPercent = (ratio) => `${(ratio * 100).toFixed(1)}%`
@@ -85,6 +86,8 @@ function Dashboard() {
   const [options, setOptions] = useState({ status: 'loading', families: [], rounds: [], message: '' })
   const [familyId, setFamilyId] = useState('')
   const [roundId, setRoundId] = useState('')
+  // 가중/비가중 토글은 화면에서만 바꾼다(서버에 보내지 않는다). 선택이 바뀌어도 유지한다.
+  const [vocMode, setVocMode] = useState('unweighted')
   // 마지막으로 끝난 요청의 결과. key가 현재 선택과 다르면 아직 불러오는 중이다.
   const [view, setView] = useState({ key: '', status: 'idle', data: null, message: '' })
   const selectionKey = `${familyId}/${roundId}`
@@ -187,10 +190,9 @@ function Dashboard() {
       )}
       {view.key === selectionKey && view.status === 'ready' && <SurveySection survey={view.data.survey} />}
 
-      <section className="demo-section voc-placeholder" aria-labelledby="voc-heading">
-        <h2 id="voc-heading">외부 VOC 집계</h2>
-        <p className="note">준비 중입니다. 가중/비가중 토글과 미판정·제목·본문 없음 구분은 이후 단계에서 채웁니다.</p>
-      </section>
+      {view.key === selectionKey && view.status === 'ready' && (
+        <Voc voc={view.data.voc} mode={vocMode} onModeChange={setVocMode} />
+      )}
     </div>
   )
 }
