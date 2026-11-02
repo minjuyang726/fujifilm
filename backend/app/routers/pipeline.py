@@ -13,8 +13,11 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_session
 from app.llm.client import LLMClient, LLMConfigError, ModelNotConfigured, build_default_client, get_ad_model_name
+from app.llm.cost import CostGuard, Prices, estimate_ad_cost
 from app.models import PipelineRun, Review, Round
 from app.schemas.pipeline import AdJudgementRequest, RunCreated, RunDetail, as_utc
+from app.services.ad_cost import char_counts_to_send
+from app.services.ad_judgement import BATCH_SIZE
 from app.services.ad_judgement_step import STEP_NAME, run_ad_judgement_step
 
 router = APIRouter(prefix="/api", tags=["pipeline"])
@@ -59,6 +62,23 @@ def run_ad_judgement(
     except LLMConfigError:
         raise _error(500, "LLM_NOT_CONFIGURED", "OpenAI 키가 설정되지 않았습니다.") from None
 
+    # 비용 가드: 호출 전에 예상 비용 상한을 계산한다. 본문은 가져오지 않고 글자 수만 읽는다.
+    settings = get_settings()
+    if settings.price_input_per_m is None or settings.price_output_per_m is None:
+        raise _error(500, "PRICE_NOT_CONFIGURED", "비용 가드에 필요한 단가가 설정되지 않아 호출하지 않았습니다.")
+    prices = Prices(settings.price_input_per_m, settings.price_output_per_m)
+    char_counts = char_counts_to_send(session, review_ids)  # 제목 또는 본문이 있는 글의 글자 수만 읽는다
+    estimate = estimate_ad_cost(char_counts, BATCH_SIZE, prices)
+    limit = settings.ad_judgement_cost_limit_usd
+    if estimate.upper_usd > limit:
+        raise _error(
+            422,
+            "COST_LIMIT_EXCEEDED",
+            f"예상 비용 상한 ${estimate.upper_usd:.4f}가 한도 ${limit:.2f}를 넘어 호출하지 않았습니다.",
+        )
+    fallback_call_usd = estimate.one_pass_usd / estimate.calls if estimate.calls else 0.0
+    cost_guard = CostGuard(limit, prices, fallback_call_usd)
+
     run = run_ad_judgement_step(
         session,
         round_id=round_id,
@@ -67,6 +87,7 @@ def run_ad_judgement(
         model_name=model_name,
         max_items=max_items,
         review_ids=review_ids,
+        cost_guard=cost_guard,
     )
     return RunCreated(run_id=run.run_id, step=STEP_NAME, status=run.status, started_at=as_utc(run.started_at))
 

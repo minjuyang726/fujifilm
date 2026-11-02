@@ -23,6 +23,7 @@ MAX_VALIDATION_RETRIES = 2
 BACKOFF_SECONDS = (1.0, 2.0, 4.0)
 
 ERROR_INVALID_OUTPUT = "INVALID_OUTPUT"
+ERROR_COST_LIMIT = "COST_LIMIT"
 
 
 @dataclass(frozen=True)
@@ -54,12 +55,17 @@ class CallRecord:
 @dataclass
 class JudgeReport:
     outcomes: list[Outcome] = field(default_factory=list)
-    not_run: list[int] = field(default_factory=list)  # 영구 오류로 중단되어 보내지 못한 항목
+    not_run: list[int] = field(default_factory=list)  # 영구 오류나 비용 한도로 중단되어 보내지 못한 항목
     aborted: bool = False
+    cost_stopped: bool = False  # 실행 중 누적 비용이 한도를 넘어 중단했다
 
 
 def _noop(_record: CallRecord) -> None:
     return None
+
+
+def _never() -> bool:
+    return False
 
 
 def _judge_batch(
@@ -70,8 +76,12 @@ def _judge_batch(
     sleep: Callable[[float], None],
     clock: Callable[[], float],
     on_call: Callable[[CallRecord], None],
+    should_stop: Callable[[], bool] = _never,
 ) -> tuple[list[Outcome], bool]:
-    """한 묶음을 판정한다. (결과, 영구 오류로 중단했는지)를 돌려준다."""
+    """한 묶음을 판정한다. (결과, 영구 오류로 중단했는지)를 돌려준다.
+
+    should_stop이 참이면(비용 한도 초과) 다시 요청하지 않고 남은 항목을 failed(COST_LIMIT)로 둔다.
+    """
     by_id = {review.review_id: review for review in batch}
     pending = [review.review_id for review in batch]
     outcomes: dict[int, Outcome] = {}
@@ -83,6 +93,9 @@ def _judge_batch(
             outcomes[review_id] = Outcome(review_id, "failed", error_code=code)
 
     while pending:
+        if should_stop():
+            fail_pending(ERROR_COST_LIMIT)
+            break
         items = [
             {"review_id": review_id, "title": by_id[review_id].title, "review_text": by_id[review_id].review_text}
             for review_id in pending
@@ -153,14 +166,26 @@ def judge_reviews(
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
     on_call: Callable[[CallRecord], None] = _noop,
+    should_stop: Callable[[], bool] = _never,
 ) -> JudgeReport:
-    """reviews를 batch_size건씩 묶어 판정한다. 영구 오류(인증 등)가 나면 남은 묶음은 보내지 않는다."""
+    """reviews를 batch_size건씩 묶어 판정한다. 영구 오류(인증 등)가 나면 남은 묶음은 보내지 않는다.
+
+    should_stop은 묶음을 보내기 전에 확인한다(비용 한도). 참이면 남은 묶음은 보내지 않고 not_run으로 둔다.
+    """
     if batch_size < 1:
         raise ValueError("batch_size는 1 이상이어야 합니다.")
     report = JudgeReport()
     for start in range(0, len(reviews), batch_size):
+        if should_stop():
+            report.cost_stopped = True
+            report.not_run = [review.review_id for review in reviews[start:]]
+            break
         batch = reviews[start : start + batch_size]
-        outcomes, aborted = _judge_batch(client, model, batch, sleep=sleep, clock=clock, on_call=on_call)
+        outcomes, aborted = _judge_batch(
+            client, model, batch, sleep=sleep, clock=clock, on_call=on_call, should_stop=should_stop
+        )
+        if any(outcome.error_code == ERROR_COST_LIMIT for outcome in outcomes):
+            report.cost_stopped = True
         report.outcomes.extend(outcomes)
         if aborted:
             report.aborted = True

@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.llm.client import LLMClient
+from app.llm.cost import CostGuard
 from app.llm.prompts.ad_judgement import PROMPT_VERSION
 from app.models import AdJudgement, LlmCallLog, PipelineRun, Review
 from app.services.ad_judgement import BATCH_SIZE, CallRecord, ReviewInput, judge_reviews
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 STEP_NAME = "ad-judgement"
 CALL_TYPE = "A"
 ERROR_INTERNAL = "INTERNAL_ERROR"
+ERROR_COST_LIMIT = "COST_LIMIT"
 
 
 def _utc_now() -> datetime:
@@ -42,6 +44,7 @@ def run_ad_judgement_step(
     batch_size: int = BATCH_SIZE,
     sleep: Callable[[float], None] = time.sleep,
     now: Callable[[], datetime] = _utc_now,
+    cost_guard: CostGuard | None = None,
 ) -> PipelineRun:
     run = PipelineRun(
         round_id=round_id,
@@ -74,6 +77,8 @@ def run_ad_judgement_step(
         over_cap = len(eligible) - len(to_send)
 
         def record_call(record: CallRecord) -> None:
+            if cost_guard is not None:
+                cost_guard.record(record.input_tokens, record.output_tokens)
             session.add(
                 LlmCallLog(
                     run_id=run_id,
@@ -92,7 +97,13 @@ def run_ad_judgement_step(
             )
 
         report = judge_reviews(
-            client, model_name, to_send, batch_size=batch_size, sleep=sleep, on_call=record_call
+            client,
+            model_name,
+            to_send,
+            batch_size=batch_size,
+            sleep=sleep,
+            on_call=record_call,
+            should_stop=(lambda: cost_guard.exceeded) if cost_guard is not None else (lambda: False),
         )
 
         judged_at = now()
@@ -132,6 +143,17 @@ def run_ad_judgement_step(
             error_code = Counter(
                 outcome.error_code for outcome in report.outcomes if outcome.status == "failed"
             ).most_common(1)[0][0]
+
+        if report.cost_stopped:
+            # 누적 비용이 한도를 넘어 남은 묶음을 보내지 않았다. 성공한 것이 있으면 partial이다.
+            status = "partial" if ok > 0 else "failed"
+            error_code = ERROR_COST_LIMIT
+            logger.warning(
+                "ad-judgement 비용 한도 초과로 중단 run_id=%s spent_usd=%.6f limit_usd=%.2f",
+                run_id,
+                cost_guard.spent_usd if cost_guard is not None else 0.0,
+                cost_guard.limit_usd if cost_guard is not None else 0.0,
+            )
 
         run.status = status
         run.counters = counters

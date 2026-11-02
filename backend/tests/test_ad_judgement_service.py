@@ -140,3 +140,35 @@ def test_assumed_constants_are_the_documented_ones():
     assert service.MAX_TRANSIENT_RETRIES == 3
     assert service.MAX_VALIDATION_RETRIES == 2
     assert results_text([(1, 0.5)])
+
+
+def test_should_stop_before_a_batch_leaves_the_rest_as_not_run_and_marks_cost_stopped():
+    client = EchoClient()
+    records = []
+    report = judge_reviews(
+        client, "test-model", reviews(25), sleep=lambda _s: None, on_call=records.append,
+        should_stop=lambda: len(records) >= 1,
+    )
+    assert len(client.calls) == 1
+    assert [outcome.review_id for outcome in report.outcomes] == list(range(1, 11))
+    assert report.not_run == list(range(11, 26))
+    assert report.cost_stopped and not report.aborted
+
+
+def test_should_stop_before_a_validation_retry_marks_the_missing_item_failed_with_cost_limit():
+    client = ScriptedClient([ok_result([(1, 0.1), (3, 0.3)])])  # 2번이 빠짐 -> 재요청해야 하지만 한도를 넘음
+    records = []
+    report = judge_reviews(
+        client, "test-model", reviews(3), sleep=lambda _s: None, on_call=records.append,
+        should_stop=lambda: len(records) >= 1,
+    )
+    assert len(client.calls) == 1  # 다시 요청하지 않았다
+    by_id = {outcome.review_id: outcome for outcome in report.outcomes}
+    assert by_id[1].status == "ok" and by_id[3].status == "ok"
+    assert (by_id[2].status, by_id[2].error_code) == ("failed", "COST_LIMIT")
+    assert report.cost_stopped
+
+
+def test_without_should_stop_nothing_changes():
+    report, records, _ = run(EchoClient(), reviews(12))
+    assert len(report.outcomes) == 12 and not report.cost_stopped and len(records) == 2

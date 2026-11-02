@@ -315,3 +315,62 @@ def test_responses_and_logs_never_contain_review_text_author_or_variant(seeded, 
     for text in texts:
         for forbidden in (SECRET_TEXT, SECRET_TITLE, "author", "variant", "옵션"):
             assert forbidden not in text
+
+
+# ---- 비용 가드 ----
+
+def test_missing_price_is_a_500_and_nothing_is_sent_or_recorded(seeded, session_factory, monkeypatch):
+    monkeypatch.delenv("OPENAI_PRICE_INPUT_PER_M")
+    client = EchoClient()
+    response = make_api(session_factory, client).post("/api/rounds/1/pipeline/ad-judgement", json=ALL)
+    assert response.status_code == 500
+    assert response.json()["detail"]["code"] == "PRICE_NOT_CONFIGURED"
+    assert client.calls == []
+    seeded.expire_all()
+    assert count(seeded, PipelineRun) == 0 and count(seeded, AdJudgement) == 0
+
+
+def test_estimate_over_the_limit_is_a_422_before_any_call_and_creates_no_run(seeded, session_factory, monkeypatch):
+    monkeypatch.setenv("AD_JUDGEMENT_COST_LIMIT_USD", "0.000001")
+    client = EchoClient()
+    response = make_api(session_factory, client).post("/api/rounds/1/pipeline/ad-judgement", json=ALL)
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "COST_LIMIT_EXCEEDED"
+    for forbidden in (SECRET_TEXT, SECRET_TITLE):
+        assert forbidden not in response.text
+    assert client.calls == []
+    seeded.expire_all()
+    assert count(seeded, PipelineRun) == 0 and count(seeded, LlmCallLog) == 0
+
+
+def test_estimate_under_the_default_limit_runs_normally(seeded, session_factory):
+    response = make_api(session_factory, EchoClient()).post("/api/rounds/1/pipeline/ad-judgement", json=ALL)
+    assert response.status_code == 201 and response.json()["status"] == "succeeded"
+
+
+def test_estimate_reads_only_lengths_and_skips_reviews_without_title_and_text(seeded, session_factory, monkeypatch):
+    # 5건 중 2건은 제목·본문이 모두 없어 보내지 않으므로 추정은 3건 기준이다. 한도를 3건 추정치 바로 위로 둔다.
+    from app.llm.cost import Prices, estimate_ad_cost
+    from app.services.ad_judgement import BATCH_SIZE
+
+    chars = [len(SECRET_TITLE) + len(SECRET_TEXT), len(SECRET_TEXT), len(SECRET_TITLE)]
+    estimate = estimate_ad_cost(chars, BATCH_SIZE, Prices(0.20, 1.20))
+    monkeypatch.setenv("AD_JUDGEMENT_COST_LIMIT_USD", repr(estimate.upper_usd * 1.001))
+    assert make_api(session_factory, EchoClient()).post("/api/rounds/1/pipeline/ad-judgement", json=ALL).status_code == 201
+    monkeypatch.setenv("AD_JUDGEMENT_COST_LIMIT_USD", repr(estimate.upper_usd * 0.999))
+    assert make_api(session_factory, EchoClient()).post("/api/rounds/1/pipeline/ad-judgement", json=ALL).status_code == 422
+
+
+def test_running_total_over_the_limit_stops_the_remaining_batches(seeded):
+    from app.llm.cost import CostGuard, Prices
+
+    guard = CostGuard(limit_usd=0.000001, prices=Prices(0.20, 1.20))  # 첫 호출(11/7토큰, 약 1.06e-5달러)에서 넘는다
+    client = EchoClient()
+    run = run_ad_judgement_step(
+        seeded, round_id=1, family_id=None, client=client, model_name=MODEL, max_items=100,
+        review_ids=ALL["review_ids"], batch_size=1, sleep=lambda _seconds: None, cost_guard=guard,
+    )
+    assert len(client.calls) == 1
+    assert (run.status, run.error_code) == ("partial", "COST_LIMIT")
+    assert run.counters == {"eligible": 3, "skipped": 2, "sent": 1, "ok": 1, "failed": 0, "not_run": 2}
+    assert guard.exceeded
