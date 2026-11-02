@@ -5,5 +5,18 @@ from app.models.pipeline_run import PipelineRun
 from app.models.product import Product
 from app.models.review import Review
 from app.models.round import Round
+from app.models.survey import ProductFamily, SurveyAnswer, SurveyQuestion, SurveyResponse
 
-__all__ = ["AdJudgement", "Base", "LlmCallLog", "PipelineRun", "Product", "Review", "Round"]
+__all__ = [
+    "AdJudgement",
+    "Base",
+    "LlmCallLog",
+    "PipelineRun",
+    "Product",
+    "ProductFamily",
+    "Review",
+    "Round",
+    "SurveyAnswer",
+    "SurveyQuestion",
+    "SurveyResponse",
+]
