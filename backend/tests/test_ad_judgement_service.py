@@ -1,7 +1,7 @@
 import pytest
 
 from app.llm.client import PermanentLLMError, TransientLLMError
-from app.llm.prompts.ad_judgement import SYSTEM_PROMPT
+from app.llm.prompts.ad_judgement import PROMPT_VERSION, SYSTEM_PROMPT, prompt_fingerprint
 from app.services import ad_judgement as service
 from app.services.ad_judgement import ReviewInput, judge_reviews
 from tests.fakes import EchoClient, ScriptedClient, ok_result, prompt_items, results_text
@@ -172,3 +172,33 @@ def test_should_stop_before_a_validation_retry_marks_the_missing_item_failed_wit
 def test_without_should_stop_nothing_changes():
     report, records, _ = run(EchoClient(), reviews(12))
     assert len(report.outcomes) == 12 and not report.cost_stopped and len(records) == 2
+
+
+# 고정 문구(시스템 프롬프트 + 사용자 프롬프트 머리말)의 SHA-256. 문구를 바꾸면 새 지문을 계산해 넣고 PROMPT_VERSION을 올린다.
+# 버전만 올리고 문구를 안 바꾸거나, 문구만 바꾸고 버전을 안 올리면 이 테스트가 실패한다.
+PINNED_FINGERPRINTS = {"ad-v2": "226985b9da07745d78dc3901c9441b50f2e19bb86bc6591398e7b765265fac29"}
+
+
+def test_prompt_text_matches_the_pinned_fingerprint_of_its_version():
+    assert PROMPT_VERSION == "ad-v2"
+    assert PROMPT_VERSION in PINNED_FINGERPRINTS, "새 버전의 지문을 PINNED_FINGERPRINTS에 추가하세요"
+    assert prompt_fingerprint() == PINNED_FINGERPRINTS[PROMPT_VERSION], (
+        "프롬프트 문구가 바뀌었습니다. PROMPT_VERSION을 올리고 새 지문을 PINNED_FINGERPRINTS에 고정하세요"
+    )
+
+
+def test_prompt_never_uses_the_forbidden_english_words():
+    import re
+
+    assert not re.search(r"author|variant", SYSTEM_PROMPT, re.IGNORECASE)
+
+
+def test_validation_retry_resends_the_same_prompt_for_only_the_failed_items_without_error_details():
+    # spec.md 6.3절(수정 후): 검증에 실패한 항목만, 같은 프롬프트로 다시 요청한다. 오류 내용은 프롬프트에 넣지 않는다.
+    client = ScriptedClient([ok_result([(1, 0.1), (3, 0.3)]), ok_result([(2, 0.2)])])
+    run(client, reviews(3))
+    first, second = client.calls
+    assert first["system_prompt"] == second["system_prompt"] == SYSTEM_PROMPT
+    assert [item["review_id"] for item in prompt_items(second["user_prompt"])] == [2]
+    for code in ("length_mismatch", "unknown_id", "duplicate_id", "bad_probability", "bad_schema", "not_json"):
+        assert code not in second["user_prompt"] and code not in second["system_prompt"]
