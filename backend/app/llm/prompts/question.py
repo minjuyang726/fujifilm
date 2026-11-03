@@ -9,7 +9,7 @@ v1 -> v2(결정 2026-11-03, 사용자 승인): 응답자 본인의 경험·의�
 import hashlib
 import json
 
-PROMPT_VERSION = "question-v2"
+PROMPT_VERSION = "question-v3"
 
 # 코드 검증과 같은 값이다(app/llm/question_validators.py). 문구를 바꾸면 두 곳을 같이 본다.
 MAX_QUESTION_CHARS = 100
@@ -20,7 +20,7 @@ MAX_OPTION_CHARS = 30
 SYSTEM_PROMPT = """\
 당신은 소비자 조사 담당자가 다음 회차 설문지를 준비하도록 돕는다.
 
-입력은 코드가 찾은 불확실하거나 모순되는 가설의 목록이다. 각 가설에는 hypothesis_id, kind(uncertain 또는 contradictory), statement가 있다.
+입력은 코드가 찾은 불확실하거나 서로 맞지 않는(불일치) 가설의 목록이다. 각 가설에는 hypothesis_id, kind(uncertain 또는 contradictory), statement가 있다.
 가설마다 다음 회차 설문지에 넣을 문항 초안을 정확히 1개 쓴다.
 
 규칙:

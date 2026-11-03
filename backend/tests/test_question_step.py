@@ -93,7 +93,7 @@ def test_full_flow_saves_hypotheses_and_draft_questions(world):
     assert run.counters["rules"].get("R3") == 1 and run.counters["attempts"] == 1 and run.counters["llm_calls"] == 1
     assert run.counters["dropped_reasons"] == {} and run.error_code is None
     log = world.session.scalars(select(LlmCallLog).where(LlmCallLog.run_id == run.run_id)).all()
-    assert len(log) == 1 and log[0].call_type == "C" and log[0].prompt_version == "question-v2" and log[0].model_name == "fake-question-model"
+    assert len(log) == 1 and log[0].call_type == "C" and log[0].prompt_version == "question-v3" and log[0].model_name == "fake-question-model"
     # 호출 C에는 가설의 id·종류·진술문만 간다
     sent = client.calls[0]["user_prompt"]
     for forbidden in ("related_row_ids", "survey:q", "review_text", "author", "allowed_evidence"):

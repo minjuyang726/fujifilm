@@ -31,7 +31,7 @@ def verdict(item, accepted=()):
 
 # ---------- 프롬프트와 스키마 ----------
 def test_prompt_version_and_fingerprint_are_pinned():
-    assert prompt.PROMPT_VERSION == "question-v2"
+    assert prompt.PROMPT_VERSION == "question-v3"
     assert prompt.prompt_fingerprint() == EXPECTED_FINGERPRINT
 
 
@@ -164,4 +164,4 @@ def test_cost_estimator_formula():
     assert QUESTION_CALIBRATION.retry_multiplier == 3
 
 
-EXPECTED_FINGERPRINT = "ec5272d4bbc5956ab305dfd84c312a53aff308641064180be93d96c0d7ac5b4a"
+EXPECTED_FINGERPRINT = "66ae0f282273d64ae2d700a662ed9c7374bd98c06dcb4fd4b39908cf5e95d455"

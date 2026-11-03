@@ -530,7 +530,7 @@ n8n은 "회차별 정기 실행과 단계 연결"을 맡습니다. 단계를 bac
 | `questions[].options` | 문자열 배열 또는 null | 선택형 문항일 때만 값이 있다 |
 
 **구현에서 정함 (Phase 6, 호출 C, 결정 2026-11-03, 사용자 승인)**
-- 모델은 환경 값 `OPENAI_MODEL_QUESTION`에서만 읽는다(없으면 500 `MODEL_NOT_CONFIGURED`). 단가는 호출 A·B와 같은 `OPENAI_PRICE_*`를 쓴다. 프롬프트 버전은 `question-v2`(v1 -> v2: 아래 "문항 품질 규칙")이고 지문 테스트를 붙인다. 실행당 비용 한도는 $0.5(임시, `QUESTION_COST_LIMIT_USD`). 재시도 정책은 호출 B와 같다(일시 오류 대기 1·2·4초 최대 3회, 통과 문항 0개 또는 스키마 오류면 전체 최대 2회 재요청).
+- 모델은 환경 값 `OPENAI_MODEL_QUESTION`에서만 읽는다(없으면 500 `MODEL_NOT_CONFIGURED`). 단가는 호출 A·B와 같은 `OPENAI_PRICE_*`를 쓴다. 프롬프트 버전은 `question-v3`(v1 -> v2: 아래 "문항 품질 규칙", v2 -> v3: 서술 한 줄에서 "모순되는 가설"을 "서로 맞지 않는(불일치) 가설"로 바꿈, 결정 2026-11-03, 사용자 지시)이고 지문 테스트를 붙인다. 실행당 비용 한도는 $0.5(임시, `QUESTION_COST_LIMIT_USD`). 재시도 정책은 호출 B와 같다(일시 오류 대기 1·2·4초 최대 3회, 통과 문항 0개 또는 스키마 오류면 전체 최대 2회 재요청).
 - 입력은 가설 목록 `{hypothesis_id, kind, statement}`뿐이다. 진술문은 집계된 수치로 코드가 만든 문장이고 리뷰 본문, 작성자, 근거 ID는 넣지 않는다. `previous_questions`는 입력하지 않는다.
 - 출력의 `type`은 `scale5` / `single` / `multi`. `single`·`multi`는 `options` 2~6개(문자열), `scale5`는 `options` null이다. 문항 `text`는 비어 있지 않고 100자 이내(가정)다.
 - 문항별 검증과 제외 사유: `hypothesis_id`가 입력에 없거나 같은 가설에 문항이 둘 이상이면 제외(첫 문항만 쓴다), `type`이나 `options` 형식이 틀리면 제외, 길이 초과·빈 문항이면 제외, 문항과 선택지에 아라비아 숫자나 한글 수량 표현이 있으면 제외한다("새 수치 없음"). 코드가 채우는 `scale5`의 1~5는 예외다.
