@@ -22,7 +22,7 @@ from app.config import VOC_SMALL_SAMPLE_THRESHOLD, get_settings  # noqa: E402
 from app.db import make_engine  # noqa: E402
 from app.llm.cost import Prices, estimate_question_cost  # noqa: E402
 from app.models import ProductFamily, Round, SurveyQuestion  # noqa: E402
-from app.services.hypotheses import find_hypotheses  # noqa: E402
+from app.services.hypotheses import find_hypotheses, question_targets  # noqa: E402
 from app.services.question_step import prompts_for  # noqa: E402
 from app.services.snapshot import compute_snapshot  # noqa: E402
 
@@ -48,13 +48,13 @@ def main() -> int:
                     session, family, round_row, weight_floor=settings.ad_weight_floor, small_sample_threshold=VOC_SMALL_SAMPLE_THRESHOLD
                 )
                 types = dict(session.execute(select(SurveyQuestion.code, SurveyQuestion.type).where(SurveyQuestion.round_id == round_row.round_id)).all())
-                found = find_hypotheses(table, types)
+                found = question_targets(find_hypotheses(table, types))  # R1은 호출 C 입력에서 뺀다
                 system_prompt, user_prompt = prompts_for([{**item, "hypothesis_id": i} for i, item in enumerate(found, start=1)])
                 estimate = estimate_question_cost(len(system_prompt), len(user_prompt), prices, len(found))
                 total_one += estimate.one_pass_usd
                 total_upper += estimate.upper_usd
                 print(
-                    f"제품군 {family.family_id} {round_row.label}: 가설 {len(found)}개, 프롬프트 글자 수 {len(system_prompt)}(시스템) + {len(user_prompt)}(가설)"
+                    f"제품군 {family.family_id} {round_row.label}: 문항 대상 가설 {len(found)}개, 프롬프트 글자 수 {len(system_prompt)}(시스템) + {len(user_prompt)}(가설)"
                     f" | 입력 토큰 상한 {estimate.input_tokens:,}, 출력 토큰 상한 {estimate.output_tokens:,}"
                     f" | 한 번 ${estimate.one_pass_usd:.4f}, 재시도 배수 3 적용 ${estimate.upper_usd:.4f}"
                     f" | 한도 {'넘지 않음' if estimate.upper_usd <= limit else '넘음'}"

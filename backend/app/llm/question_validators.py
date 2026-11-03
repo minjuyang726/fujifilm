@@ -1,7 +1,8 @@
 """호출 C 출력 검증(spec.md 6.3절 호출 C). 문항별로 검증하고 통과하지 못한 문항은 쓰지 않는다.
 
 제외 범주(counters): dropped_hypothesis(입력에 없는 hypothesis_id, 같은 가설에 둘째 문항), dropped_format(빈 문항, 길이 초과, type·options 형식 오류),
-dropped_number(문항이나 선택지에 아라비아 숫자 또는 한글 수량 표현이 있음 - 새 수치 없음, FR-0.3). 세부 사유 코드는 dropped_reasons에 센다.
+dropped_number(문항이나 선택지에 아라비아 숫자 또는 한글 수량 표현이 있음 - 새 수치 없음, FR-0.3),
+dropped_meta(문항이나 선택지에 표본|VOC|수집된|판정|합성|가설이 있음 - 응답자에게 데이터·분석을 언급하지 않음, question-v2). 세부 사유 코드는 dropped_reasons에 센다.
 결과에는 사유 코드만 담고 문항 내용은 담지 않는다. scale5의 1~5는 코드가 채우므로 숫자 검사 대상이 아니다.
 """
 
@@ -17,6 +18,7 @@ TYPES = ("scale5", "single", "multi")
 DROPPED_HYPOTHESIS = "dropped_hypothesis"
 DROPPED_FORMAT = "dropped_format"
 DROPPED_NUMBER = "dropped_number"
+DROPPED_META = "dropped_meta"
 
 REASON_UNKNOWN_HYPOTHESIS = "unknown_hypothesis"
 REASON_DUPLICATE_HYPOTHESIS = "duplicate_hypothesis"
@@ -25,8 +27,11 @@ REASON_TEXT_TOO_LONG = "text_too_long"
 REASON_BAD_TYPE = "bad_type"
 REASON_BAD_OPTIONS = "bad_options"
 REASON_HAS_NUMBER = "has_number"
+REASON_META_WORD = "meta_word"
 
 _DIGIT = re.compile(r"\d")
+# VOC는 영문자 사이에 낀 경우(예: vocal)는 단어가 아니므로 뺀다. 나머지는 한글 단어 일부로 걸린다("가설치"처럼 정상 단어에 들어 있어도 제외되는 것이 알려진 한계).
+_META_WORDS = re.compile(r"표본|수집된|판정|합성|가설|(?<![A-Za-z])VOC(?![A-Za-z])", re.IGNORECASE)
 
 
 @dataclass
@@ -65,6 +70,10 @@ def contains_number(text: str) -> bool:
     return bool(_DIGIT.search(text) or has_korean_quantity(text))
 
 
+def contains_meta_word(text: str) -> bool:
+    return bool(_META_WORDS.search(text))
+
+
 def check_question(item: dict, hypothesis_ids: set[int], accepted_ids: set[int]) -> tuple[str | None, str | None]:
     """(범주, 사유 코드). 통과하면 (None, None)."""
     if item["hypothesis_id"] not in hypothesis_ids:
@@ -91,6 +100,8 @@ def check_question(item: dict, hypothesis_ids: set[int], accepted_ids: set[int])
             or len(set(cleaned)) != len(cleaned)
         ):
             return DROPPED_FORMAT, REASON_BAD_OPTIONS
+    if contains_meta_word(text) or any(contains_meta_word(o) for o in (options or [])):
+        return DROPPED_META, REASON_META_WORD
     if contains_number(text) or any(contains_number(o) for o in (options or [])):
         return DROPPED_NUMBER, REASON_HAS_NUMBER
     return None, None
@@ -100,7 +111,7 @@ def check_question(item: dict, hypothesis_ids: set[int], accepted_ids: set[int])
 class QuestionFilterResult:
     accepted: list[dict] = field(default_factory=list)  # {"hypothesis_id", "text", "type", "options"(정리됨)}
     counters: dict = field(
-        default_factory=lambda: {"proposed": 0, "accepted": 0, "dropped_hypothesis": 0, "dropped_format": 0, "dropped_number": 0}
+        default_factory=lambda: {"proposed": 0, "accepted": 0, "dropped_hypothesis": 0, "dropped_format": 0, "dropped_number": 0, "dropped_meta": 0}
     )
     dropped_reasons: dict = field(default_factory=dict)
 

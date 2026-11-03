@@ -151,3 +151,13 @@ def find_hypotheses(table: dict, question_types: dict[str, str]) -> list[dict]:
 
     ordered = contradictory + [item for _, _, item in uncertain_r2] + uncertain_r1
     return ordered[:MAX_HYPOTHESES]
+
+
+# R1(표본 적음)은 응답자가 답할 수 없는 데이터 부족 사안이라 hypothesis에는 저장하되 호출 C 입력에서는 뺀다(결정 2026-11-03, SQ-9).
+QUESTION_EXCLUDED_RULES = ("R1",)
+SMALL_SAMPLE_ROW_IDS = ["voc:judged:count"]  # R1 가설의 related_row_ids. 저장된 가설이 R1인지 알아볼 때 쓴다.
+
+
+def question_targets(found: list[dict]) -> list[dict]:
+    """호출 C에 보내고 문항을 받을 가설(문항 대상). 가설당 문항 1개 규칙은 이 목록에만 적용된다."""
+    return [item for item in found if item["rule"] not in QUESTION_EXCLUDED_RULES]

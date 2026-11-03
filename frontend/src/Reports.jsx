@@ -178,6 +178,19 @@ function Reports() {
                 </ol>
               </>
             )}
+            {(data.next_survey.no_question_hypotheses ?? []).length > 0 && (
+              <>
+                <h3>문항이 없는 가설</h3>
+                <ul className="evidence-items">
+                  {(data.next_survey.no_question_hypotheses ?? []).map((item) => (
+                    <li key={item.hypothesis_id}>
+                      {item.note}
+                      <span className="source-line">{`${KIND_LABEL[item.kind] ?? item.kind}: ${item.statement}`}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </section>
         </>
       )}

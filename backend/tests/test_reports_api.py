@@ -62,6 +62,10 @@ def test_report_has_action_plan_and_next_survey_together(world):
     hypothesis = world.session.get(Hypothesis, question["hypothesis_id"])
     assert hypothesis.kind == question["hypothesis_kind"] and hypothesis.statement == question["hypothesis_statement"]
     assert {q["type"] for q in survey["questions"]} <= {"scale5", "single", "multi"}
+    # R1(표본 적음)은 문항이 없고 별도 목록에 표시 문구와 함께 나온다
+    assert [(n["kind"], n["note"]) for n in survey["no_question_hypotheses"]] == [("uncertain", "표본 적음 — 데이터 보강 필요(문항 없음)")]
+    assert "표본이 적어" in survey["no_question_hypotheses"][0]["statement"]
+    assert survey["no_question_hypotheses"][0]["hypothesis_id"] not in {q["hypothesis_id"] for q in survey["questions"]}
 
 
 def test_report_shows_only_the_latest_draft_run(world):
@@ -77,7 +81,7 @@ def test_report_shows_only_the_latest_draft_run(world):
 def test_report_without_a_draft_has_an_empty_question_list(world):
     report = make_report(world)
     body = world.get(f"/api/reports/{report.report_id}").json()
-    assert body["next_survey"] == {"status": "draft", "run_id": None, "questions": []} and len(body["action_plan"]) == 2
+    assert body["next_survey"] == {"status": "draft", "run_id": None, "questions": [], "no_question_hypotheses": []} and len(body["action_plan"]) == 2
 
 
 def test_report_errors(world):
@@ -98,6 +102,8 @@ def test_export_returns_a_standalone_html_attachment(world):
     for item in body["action_plan"]:
         assert item["sentence"] in document  # 한글이라 이스케이프되지 않는다
     assert "합성" in document and "실측" in document and "초안" in document
+    assert "회차 공통 합성 응답(회차당 100건)" in document
+    assert "표본 적음 — 데이터 보강 필요(문항 없음)" in document and "문항이 없는 가설" in document
     assert re.search(r"근거 리뷰 \d+건", document) and re.search(r"근거 설문 \d+건\(합성\)", document)
     assert "일회용 카메라" in document and "2026-Q1" in document and "다음 회차 설문지" in document
     for question in body["next_survey"]["questions"]:

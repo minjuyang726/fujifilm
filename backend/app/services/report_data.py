@@ -10,6 +10,11 @@ from sqlalchemy.orm import Session
 
 from app.models import ActionSuggestion, AnalysisSnapshot, Hypothesis, NextSurveyQuestion, ProductFamily, Report, Round
 from app.services.evidence import evidence_counts
+from app.services.hypotheses import SMALL_SAMPLE_ROW_IDS
+
+
+NOTE_SMALL_SAMPLE = "표본 적음 — 데이터 보강 필요(문항 없음)"
+NOTE_NO_QUESTION = "문항 없음(검증을 통과한 문항이 없음)"
 
 
 def latest_report(session: Session, family_id: int, round_id: int) -> Report | None:
@@ -99,11 +104,27 @@ def build_report(session: Session, report_id: int) -> dict | None:
                     "hypothesis_statement": hypothesis.statement,
                 }
             )
+    # 같은 실행에서 저장됐지만 문항이 없는 가설. R1(표본 적음)은 호출 C 입력에서 빼므로 항상 여기에 나온다.
+    no_question = []
+    if run_id is not None:
+        asked = {q["hypothesis_id"] for q in questions}
+        for hypothesis in session.scalars(select(Hypothesis).where(Hypothesis.run_id == run_id).order_by(Hypothesis.hypothesis_id)):
+            if hypothesis.hypothesis_id in asked:
+                continue
+            small_sample = hypothesis.related_row_ids == SMALL_SAMPLE_ROW_IDS
+            no_question.append(
+                {
+                    "hypothesis_id": hypothesis.hypothesis_id,
+                    "kind": hypothesis.kind,
+                    "statement": hypothesis.statement,
+                    "note": NOTE_SMALL_SAMPLE if small_sample else NOTE_NO_QUESTION,
+                }
+            )
     return {
         "report_id": report.report_id,
         "round": {"round_id": round_row.round_id, "label": round_row.label},
         "family": None if family is None else {"family_id": family.family_id, "name": family.name},
         "generated_at": report.generated_at.isoformat(),
         "action_plan": plan,
-        "next_survey": {"status": "draft", "run_id": run_id, "questions": questions},
+        "next_survey": {"status": "draft", "run_id": run_id, "questions": questions, "no_question_hypotheses": no_question},
     }

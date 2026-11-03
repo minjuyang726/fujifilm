@@ -1,6 +1,6 @@
 """step next-survey-draft: 스냅샷에서 코드 규칙으로 가설을 찾고(R1~R4, LLM 미관여), 가설마다 다음 회차 문항 초안을 호출 C로 쓴다.
 
-- 가설이 0개면 LLM을 부르지 않고 failed(NO_HYPOTHESES)로 끝낸다. 가설은 실행 기록(run_id)과 함께 저장하고 쌓는다(SQ-8).
+- 가설이 0개이거나 문항 대상 가설(R1 제외)이 0개면 LLM을 부르지 않고 failed(NO_HYPOTHESES)로 끝낸다. 가설은 R1을 포함해 실행 기록(run_id)과 함께 저장하고 쌓는다(SQ-8).
 - 문항은 통과한 것만 해당 report에 붙이고(run_id 포함) status는 항상 draft다(FR-3.3). 최신 초안 = 가장 큰 run_id.
 - 재시도 정책은 호출 B와 같다: 일시 오류 대기 1·2·4초 최대 3회, 통과 문항 0개이거나 스키마 오류면 전체를 최대 2회 다시 요청한다.
 - 리뷰 본문, 키, LLM 요청·응답 원문은 로그, 실행 기록, llm_call_log 어디에도 남기지 않는다. LLM 입력은 가설의 id, 종류, 진술문뿐이다.
@@ -24,7 +24,7 @@ from app.llm.question_validators import QuestionFilterResult, filter_questions, 
 from app.models import (
     AnalysisSnapshot, Hypothesis, LlmCallLog, NextSurveyQuestion, PipelineRun, ProductFamily, Report, Round, SurveyQuestion,
 )
-from app.services.hypotheses import find_hypotheses
+from app.services.hypotheses import find_hypotheses, question_targets
 from app.services.report_data import report_snapshot_id
 
 logger = logging.getLogger(__name__)
@@ -91,12 +91,14 @@ def run_next_survey_draft(
         found = hypotheses_for(session, snapshot)
         counters: dict = {
             "hypotheses": len(found),
+            "question_hypotheses": len(question_targets(found)),
             "rules": dict(Counter(item["rule"] for item in found)),
             "proposed": 0,
             "accepted": 0,
             "dropped_hypothesis": 0,
             "dropped_format": 0,
             "dropped_number": 0,
+            "dropped_meta": 0,
             "dropped_reasons": {},
             "attempts": 0,
             "llm_calls": 0,
@@ -120,8 +122,16 @@ def run_next_survey_draft(
         for row, item in zip(stored, found):
             item["hypothesis_id"] = row.hypothesis_id
         order_of = {row.hypothesis_id: index for index, row in enumerate(stored)}  # 가설 우선순위 순서로 문항 번호를 매긴다
-        system_prompt, user_prompt = prompts_for(found)
-        ids = set(order_of)
+        targets = question_targets(found)  # R1은 저장만 하고 LLM 입력에서 뺀다
+        if not targets:
+            session.commit()
+            run = session.get(PipelineRun, run_id)
+            run.status, run.error_code, run.counters, run.finished_at = "failed", ERROR_NO_HYPOTHESES, counters, now()
+            session.commit()
+            log_event(logger, logging.INFO, "next_survey_draft_end", run_id=run_id, status="failed", error_code=ERROR_NO_HYPOTHESES)
+            return run
+        system_prompt, user_prompt = prompts_for(targets)
+        ids = {item["hypothesis_id"] for item in targets}
 
         final: QuestionFilterResult | None = None
         error_code: str | None = None
@@ -151,7 +161,7 @@ def run_next_survey_draft(
                 session.add(
                     LlmCallLog(
                         run_id=run_id, call_type=CALL_TYPE, model_name=model_name, prompt_version=PROMPT_VERSION, attempt_no=call_no,
-                        status="api_error", item_count=len(found), latency_ms=latency_ms, error_code=problem,
+                        status="api_error", item_count=len(targets), latency_ms=latency_ms, error_code=problem,
                         input_tokens=None, output_tokens=None, created_at=now(),
                     )
                 )
@@ -173,12 +183,12 @@ def run_next_survey_draft(
             session.add(
                 LlmCallLog(
                     run_id=run_id, call_type=CALL_TYPE, model_name=model_name, prompt_version=PROMPT_VERSION, attempt_no=call_no,
-                    status="ok" if filtered.accepted else "invalid_output", item_count=len(found), latency_ms=latency_ms,
+                    status="ok" if filtered.accepted else "invalid_output", item_count=len(targets), latency_ms=latency_ms,
                     error_code=parsed.problem, input_tokens=result.input_tokens, output_tokens=result.output_tokens, created_at=now(),
                 )
             )
             final = filtered
-            for key in ("proposed", "accepted", "dropped_hypothesis", "dropped_format", "dropped_number"):
+            for key in ("proposed", "accepted", "dropped_hypothesis", "dropped_format", "dropped_number", "dropped_meta"):
                 counters[key] = filtered.counters[key]  # 마지막으로 검증한 시도의 건수
             counters["dropped_reasons"] = dict(filtered.dropped_reasons)
             if filtered.accepted:

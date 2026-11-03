@@ -38,7 +38,7 @@ class QuestionClient:
             questions.append(
                 {
                     "hypothesis_id": item["hypothesis_id"],
-                    "text": f"가설 {chr(65 + index)}에 대해 어떻게 생각하시나요?".replace("가설 A", "첫째 가설").replace("가설 B", "둘째 가설"),
+                    "text": f"{chr(65 + index)} 주제에 대해 어떻게 생각하시나요?",
                     "type": kind,
                     "options": None if kind == "scale5" else ["선택지 가", "선택지 나", "선택지 다"],
                 }
@@ -81,18 +81,19 @@ def test_full_flow_saves_hypotheses_and_draft_questions(world):
     assert all(h.run_id == run.run_id and h.round_id == world.q1.round_id and h.family_id == 1 for h in hypotheses)
     assert {h.snapshot_id for h in hypotheses} == {snapshot_for_report(world.session, report).snapshot_id}
     # 가설당 문항 1개, 모두 draft, 모두 가설과 연결, 순서는 가설 우선순위 순서
-    assert len(questions) == len(hypotheses)
+    targets = [h for h in hypotheses if h.related_row_ids != ["voc:judged:count"]]  # R1(표본 적음)은 저장만 하고 문항을 만들지 않는다
+    assert len(targets) == len(hypotheses) - 1 and len(questions) == len(targets)
     assert all(q.status == "draft" and q.report_id == report.report_id and q.run_id == run.run_id for q in questions)
-    assert [q.hypothesis_id for q in questions] == [h.hypothesis_id for h in hypotheses]
+    assert [q.hypothesis_id for q in questions] == [h.hypothesis_id for h in targets]
     assert [q.order_no for q in questions] == list(range(1, len(questions) + 1))
     by_type = {q.type: q for q in questions}
     assert [o["code"] for o in by_type["scale5"].options_json] == ["1", "2", "3", "4", "5"] and by_type["scale5"].options_json[0]["label"] == "1점"
     assert [o["label"] for o in by_type["single"].options_json] == ["선택지 가", "선택지 나", "선택지 다"]
-    assert run.counters["hypotheses"] == len(hypotheses) and run.counters["accepted"] == len(questions)
+    assert run.counters["hypotheses"] == len(hypotheses) and run.counters["accepted"] == len(questions) and run.counters["question_hypotheses"] == len(targets)
     assert run.counters["rules"].get("R3") == 1 and run.counters["attempts"] == 1 and run.counters["llm_calls"] == 1
     assert run.counters["dropped_reasons"] == {} and run.error_code is None
     log = world.session.scalars(select(LlmCallLog).where(LlmCallLog.run_id == run.run_id)).all()
-    assert len(log) == 1 and log[0].call_type == "C" and log[0].prompt_version == "question-v1" and log[0].model_name == "fake-question-model"
+    assert len(log) == 1 and log[0].call_type == "C" and log[0].prompt_version == "question-v2" and log[0].model_name == "fake-question-model"
     # 호출 C에는 가설의 id·종류·진술문만 간다
     sent = client.calls[0]["user_prompt"]
     for forbidden in ("related_row_ids", "survey:q", "review_text", "author", "allowed_evidence"):
@@ -120,13 +121,42 @@ def test_zero_hypotheses_fail_without_calling_the_llm(world, monkeypatch):
     assert world.session.scalars(select(NextSurveyQuestion)).all() == []
 
 
+def test_only_small_sample_hypothesis_fails_with_no_hypotheses_but_is_still_stored(world, monkeypatch):
+    make_report(world)
+    client = use_client(QuestionClient())
+    only_r1 = [
+        {"rule": "R1", "kind": "uncertain", "statement": "표본이 적다.", "related_row_ids": ["voc:judged:count"]},
+    ]
+    monkeypatch.setattr(question_step, "hypotheses_for", lambda session, snapshot: only_r1)
+    body = run_draft(world).json()
+    run = world.session.get(PipelineRun, body["run_id"])
+    assert body["status"] == "failed" and run.error_code == "NO_HYPOTHESES"
+    assert run.counters["hypotheses"] == 1 and run.counters["question_hypotheses"] == 0
+    assert client.calls == [] and world.session.scalars(select(NextSurveyQuestion)).all() == []
+    assert len(world.session.scalars(select(Hypothesis)).all()) == 1
+
+
+def test_meta_word_questions_are_dropped_with_their_own_counter(world):
+    make_report(world)
+
+    def mutate(questions):
+        questions[0]["text"] = "수집된 의견을 어떻게 보시나요?"
+        questions[1]["options"] = ["선택지 가", "표본 나"]
+        return questions
+
+    use_client(QuestionClient(mutate=mutate))
+    run = world.session.get(PipelineRun, run_draft(world).json()["run_id"])
+    assert run.counters["dropped_meta"] == 2 and run.counters["dropped_reasons"] == {"meta_word": 2}
+    assert run.counters["accepted"] == run.counters["question_hypotheses"] - 2
+
+
 def test_invalid_questions_are_dropped_by_category(world):
     make_report(world)
 
     def mutate(questions):
         questions[0]["text"] = "월 3회 이상 쓰시나요?"  # 숫자
         questions[1]["options"] = ["하나"]  # 선택지 개수
-        questions.append({**questions[2], "text": "같은 가설에 둘째 문항인가요?"})  # 같은 가설 둘째 문항
+        questions.append({**questions[2], "text": "같은 주제에 둘째 문항인가요?"})  # 같은 가설 둘째 문항
         questions.append({"hypothesis_id": 999999, "text": "없는 가설인가요?", "type": "single", "options": ["가", "나"]})
         return questions
 
@@ -137,7 +167,7 @@ def test_invalid_questions_are_dropped_by_category(world):
     c = run.counters
     assert c["dropped_number"] == 1 and c["dropped_hypothesis"] == 2 and c["dropped_format"] == 1
     assert c["dropped_reasons"] == {"has_number": 1, "bad_options": 1, "duplicate_hypothesis": 1, "unknown_hypothesis": 1}
-    assert c["accepted"] == c["hypotheses"] - 2 and c["proposed"] == c["hypotheses"] + 2
+    assert c["accepted"] == c["question_hypotheses"] - 2 and c["proposed"] == c["question_hypotheses"] + 2
     # 문항 내용은 실행 기록에 없다
     assert "월 3회" not in json.dumps(c, ensure_ascii=False)
 

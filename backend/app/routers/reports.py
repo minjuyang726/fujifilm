@@ -69,10 +69,18 @@ class QuestionOut(BaseModel):
     hypothesis_statement: str
 
 
+class NoQuestionHypothesis(BaseModel):
+    hypothesis_id: int
+    kind: str
+    statement: str
+    note: str
+
+
 class NextSurvey(BaseModel):
     status: str
     run_id: int | None
     questions: list[QuestionOut]
+    no_question_hypotheses: list[NoQuestionHypothesis]
 
 
 class ReportOut(BaseModel):

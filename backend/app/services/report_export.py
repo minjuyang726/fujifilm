@@ -12,6 +12,7 @@ from html.parser import HTMLParser
 
 NOTICE = (
     "이 리포트의 설문 수치는 합성 응답에서 나온 시연용 수치이며 성과가 아닙니다. "
+    "설문은 제품군 구분 없이 회차 공통 합성 응답(회차당 100건)입니다. "
     "외부 VOC 수치는 수집된 쿠팡 리뷰의 실측 집계입니다. 근거는 건수로만 적었고, 개별 근거는 시스템에서 확인합니다."
 )
 TYPE_LABEL = {"scale5": "5점 척도", "single": "하나 고르기", "multi": "여러 개 고르기"}
@@ -126,6 +127,14 @@ def render_report_html(report: dict) -> str:
         parts.append("</ol>")
     else:
         parts.append("<p>문항 초안이 없습니다.</p>")
+    notes = report["next_survey"].get("no_question_hypotheses") or []
+    if notes:
+        parts.append("<h2>문항이 없는 가설</h2><ul>")
+        for note in notes:
+            parts.append(
+                f'<li>{_e(note["note"])}<span class="hyp">{_e(KIND_LABEL.get(note["kind"], note["kind"]))}: {_e(note["statement"])}</span></li>'
+            )
+        parts.append("</ul>")
     parts.append("</body></html>")
     document = "\n".join(parts)
     if find_external_references(document):
