@@ -130,7 +130,7 @@ def test_full_flow_saves_report_cards_and_counters(world):
     assert all(s.snapshot_id == snapshot.snapshot_id for s in saved)
     log = world.session.scalars(select(LlmCallLog)).all()
     assert len(log) == 1 and log[0].call_type == "B" and log[0].status == "ok" and log[0].model_name == "fake-model"
-    assert log[0].prompt_version == "suggest-v5" and (log[0].input_tokens, log[0].output_tokens) == (1500, 300) and log[0].item_count == 3
+    assert log[0].prompt_version == "suggest-v6" and (log[0].input_tokens, log[0].output_tokens) == (1500, 300) and log[0].item_count == 3
     # 호출 B에는 영역 코드·라벨·순위 라벨만 간다: 표, 수치, 근거 ID, 리뷰 본문은 가지 않는다
     sent = fake.calls[0]["user_prompt"]
     assert fake.calls[0]["model"] == "fake-model"

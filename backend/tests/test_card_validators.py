@@ -221,6 +221,38 @@ def test_phrases_that_assume_operational_facts_are_dropped(text):
     assert check(card(kind=NOTICE_KIND, text=text)) == (DROPPED_OTHER, "deliverable_operational_fact")
 
 
+@pytest.mark.parametrize("text", [
+    "현재 안내 중인 방법으로 접수해 주십시오.",
+    "현재 안내하는 방법은 고객센터에 문의하는 것입니다.",
+    "현재 적용 중인 기준에 따라 처리합니다.",
+    "현재 적용되는 기준을 안내합니다.",
+    "현재 제공하는 서비스를 이용해 주십시오.",
+    "현재 제공 중인 혜택은 이메일로 알려 드립니다.",
+    "현재 운영 중인 창구로 문의해 주십시오.",
+    "현재 운영하고 있는 절차를 따릅니다.",
+])
+def test_phrases_that_assume_a_current_operation_exists_are_dropped_outside_slots(text):
+    assert check(card(kind=NOTICE_KIND, text=text)) == (DROPPED_OTHER, "deliverable_operational_fact")
+
+
+def test_current_operation_phrases_are_allowed_inside_a_confirmation_slot():
+    assert check(card(kind=NOTICE_KIND, text="안내 방법은 [확인 필요: 현재 안내 중인 방법이 있는지와 그 내용]입니다.")) == (None, None)
+    assert check(card(kind="FAQ 초안", text="Q. 어떻게 문의하나요? / A. [확인 필요: 현재 운영 중인 문의 창구가 있는지와 그 내용]를 확인해 주십시오.")) == (None, None)
+    # 칸 밖에 같은 전제가 하나라도 남으면 거부한다
+    assert check(card(kind=NOTICE_KIND, text="[확인 필요: 현재 안내 중인 방법]을 확인하고 현재 적용 중인 기준을 따릅니다.")) == (DROPPED_OTHER, "deliverable_operational_fact")
+
+
+def test_ordinary_sentences_with_the_word_current_or_confirm_are_not_blocked():
+    for text in ("현재 상태를 확인하겠습니다.", "현재 접수된 내용을 확인하신 뒤 문의해 주십시오.", "안내 중에는 잠시 기다려 주십시오.", "적용 여부는 [확인 필요: 적용 대상]입니다."):
+        assert check(card(kind=NOTICE_KIND, text=text)) == (None, None), text
+
+
+def test_area_names_quoted_in_a_draft_are_not_blocked_as_service_assumptions():
+    # 영역 이름에서 나온 단어(현상, 인화, 처리 기간)는 일부러 검증기에 넣지 않았다: 정상 인용과 구별할 수 없다.
+    assert check(card(kind=NOTICE_KIND, text="현상·인화 대기에 대한 문의를 받고 있습니다.")) == (None, None)
+    assert check(card(kind=NOTICE_KIND, text="처리 기간은 [확인 필요: 해당 절차가 있는지와 그 내용]입니다.")) == (None, None)
+
+
 def test_the_same_phrases_are_allowed_inside_a_confirmation_slot():
     assert check(card(kind=NOTICE_KIND, text="처리 기간은 [확인 필요: 현재 안내 중인 예상 기간]입니다.")) == (None, None)
     assert check(card(kind=NOTICE_KIND, text="결제 내용은 [확인 필요: 실제 결제 금액이 일치하는지 확인하는 방법]에 따라 안내합니다.")) == (None, None)
