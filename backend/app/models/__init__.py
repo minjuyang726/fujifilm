@@ -1,6 +1,7 @@
 from app.models.ad_judgement import AdJudgement
 from app.models.analysis import ActionSuggestion, AnalysisSnapshot, Report
 from app.models.base import Base
+from app.models.draft import Hypothesis, NextSurveyQuestion
 from app.models.llm_call_log import LlmCallLog
 from app.models.pipeline_run import PipelineRun
 from app.models.product import Product
@@ -13,7 +14,9 @@ __all__ = [
     "AdJudgement",
     "AnalysisSnapshot",
     "Base",
+    "Hypothesis",
     "LlmCallLog",
+    "NextSurveyQuestion",
     "PipelineRun",
     "Product",
     "ProductFamily",
