@@ -23,7 +23,7 @@ from app.db import make_engine  # noqa: E402
 from app.llm.cost import Prices, estimate_question_cost  # noqa: E402
 from app.models import ProductFamily, Round, SurveyQuestion  # noqa: E402
 from app.services.question_step import prompts_for, survey_options  # noqa: E402
-from app.services.question_forms import decide_form  # noqa: E402
+from app.services.question_forms import decide_form, merge_by_source  # noqa: E402
 from app.services.hypotheses import find_hypotheses, question_targets  # noqa: E402
 from app.services.snapshot import compute_snapshot  # noqa: E402
 
@@ -54,7 +54,8 @@ def main() -> int:
                 for item in question_targets(find_hypotheses(table, types)):  # R1은 호출 C 입력에서 뺀다
                     spec = decide_form(item["related_row_ids"], options)  # 코드가 형식을 정한다
                     if spec is not None:
-                        found.append({**item, "form": spec.form})
+                        found.append({**item, "form": spec.form, "source_question": spec.source_question})
+                found = merge_by_source(found)  # 같은 원문항에서 나온 가설은 한 문항으로 합친다
                 system_prompt, user_prompt = prompts_for([{**item, "hypothesis_id": i} for i, item in enumerate(found, start=1)])
                 estimate = estimate_question_cost(len(system_prompt), len(user_prompt), prices, len(found))
                 total_one += estimate.one_pass_usd
