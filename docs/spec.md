@@ -185,6 +185,13 @@ KOSSDA 자료의 변수 구조 개요는 확인되었습니다(전달받은 값,
 
 - 서술 속 수치가 코드 계산값과 일치하는지(FR-0.3), 근거 ID가 실제로 있는지(FR-2.4)를 검사하려면 LLM에 준 표를 나중에도 확인할 수 있어야 해서 저장합니다. prd.md의 DR에는 없는 테이블입니다.
 
+**구현에서 정함 (Phase 5, 스냅샷, 결정 2026-11-03, 사용자 승인)**
+- 스냅샷은 제품군 x 회차마다 하나다(`family_id` NOT NULL). `analysis-snapshot`을 실행할 때마다 쌓는다. 계산은 코드가 하고(`app/services/snapshot.py`) LLM을 쓰지 않는다. 같은 입력이면 `table_json`이 같다.
+- `table_json` = `{family, round, rows}`. 행은 `{row_id, group, source, item, metrics, small_sample}`이다. `group`은 설문 또는 VOC, `source`는 설문이 "합성"이고 VOC가 "실측", `metrics`는 지표 이름 → 숫자, `small_sample`은 판정 묶음 행에서 판정 n이 임계값 미만일 때 참이다. 리뷰 본문과 작성자는 담지 않는다.
+- 설문 행: `survey:respondents`(응답자 수), 문항 x 선택지마다 `survey:{문항코드}:{선택지코드}`(응답 수, 비율(%) 소수 1자리, 선택지 번호). 문항 10개의 선택지 47개 + 1 = 48행.
+- VOC 행: `voc:total:count`(리뷰 수), `voc:judged:count`(건수, 표본 적음 기준(건)), `voc:unjudged:count`(건수, 판정 실패 건수), `voc:no_text:count`(건수), `voc:judged:mean_unweighted`(평균 평점), `voc:judged:mean_weighted`(가중 평균 평점, 가중치 하한), `voc:judged:count_weighted`(가중 건수), `voc:judged:dist_unweighted:{1..5}`(평점, 건수, 비율(%)), `voc:judged:dist_weighted:{1..5}`(평점, 가중 건수). 판정이 0건이면 평균 행은 빠진다. 17행. 합계 65행.
+- `allowed_evidence_json` = `{row_id: {kind: "survey" | "review", ids: [정수 오름차순]}}`. 설문 행은 그 행에 들어간 `response_id`(응답 전체 단위, SQ-4b 기본안), VOC 행은 그 행에 들어간 `review_id`다. `voc:judged:*`는 판정 묶음, `voc:total:count`는 선택한 제품군·회차의 모든 리뷰, 미판정·제목·본문 없음 행은 각 묶음의 리뷰다. LLM에는 보내지 않는다(SP-3).
+
 **hypothesis (불확실·모순 가설)**
 
 | 열 | 형식 | 비고 |
@@ -216,6 +223,11 @@ KOSSDA 자료의 변수 구조 개요는 확인되었습니다(전달받은 값,
 
 - evidence_kind에 따라 가리키는 테이블이 달라 DB 외래 키로 묶을 수 없습니다. 존재 여부는 서비스 코드가 검사합니다(FR-2.4).
 - 근거 ID의 형식은 `(종류, 정수 ID)` 쌍입니다. 설문 근거의 단위(응답 전체인지 문항별 응답인지)는 확인 필요 SQ-4입니다.
+
+**구현에서 정함 (Phase 5, 리포트와 제안, 결정 2026-11-03, 사용자 승인)**
+- `report`는 `action-suggestions` 실행이 성공할 때마다 1행을 만들고(`family_id` 포함, SQ-13 기본안 대신) 쌓는다. 화면은 제품군 x 회차의 가장 최근 성공한 리포트를 보여준다. 실패한 실행은 리포트를 만들지 않는다. Phase 6에서 회차 리포트로 합치는 방식은 그때 정한다.
+- `action_suggestion`에 `(report_id, order_no)` 유일 제약을 두었다. 제안은 통과한 문장만 저장한다. `suggestion_evidence` 테이블은 만들지 않았다. 근거는 `row_ids`로 스냅샷의 `allowed_evidence_json`에서 계산한다(SQ-17 기본안).
+- 마이그레이션 `fd2af39e3e2a`: `analysis_snapshot`, `report`, `action_suggestion`(PostgreSQL에서는 RLS를 켠다).
 
 **next_survey_question (다음 회차 설문지 초안)**
 
@@ -350,7 +362,7 @@ pipeline_run 1 ─ N ad_judgement | analysis_snapshot | report | llm_call_log
 | kind | 필드 | 비고 |
 | --- | --- | --- |
 | `review` | `kind`, `review_id`, `rating`, `date`, `review_text`, `text_source` | FR-2.5. `review_text`가 비어 있으면 `title` 값을 `review_text` 자리에 넣고 `text_source`를 `title`로 한다(`text_source`는 `review_text` 또는 `title`). 기본안이며 설계 제안이다(확인 필요 SQ-15). 그 밖의 `title`과 `author`, `variant`는 담지 않는다. **구현에서 정함 (Phase 1)**: 제목과 본문이 모두 없는 글은 200으로 `review_text`와 `text_source`를 null로 돌려준다. `kind=survey`는 Phase 1 범위 밖이라 400 `BAD_REQUEST`로 거절한다 |
-| `survey` | `kind`, `response_id`, `synthetic_label`, `round`, `answers: [{question_text, value}]` | 합성 응답이면 `synthetic_label`이 `"합성"`. 필드는 설문 구조를 확인한 뒤 확정(확인 필요 SQ-5) |
+| `survey` | `kind`, `response_id`, `synthetic_label`, `round`, `answers: [{question_text, value}]` | 합성 응답이면 `synthetic_label`이 `"합성"`. 필드는 설문 구조를 확인한 뒤 확정(확인 필요 SQ-5). **구현에서 정함 (Phase 5, 결정 2026-11-03, 사용자 승인)**: `answers`는 문항 순서대로이고 `value`는 선택지 라벨이다(코드가 아니다). 다중선택은 선택 하나당 한 항목이다. `round`는 `{round_id, label}`. 없는 응답은 404 |
 
 **A-6 응답 (리포트)**
 
@@ -359,6 +371,10 @@ pipeline_run 1 ─ N ad_judgement | analysis_snapshot | report | llm_call_log
 | `report_id`, `round`, `family`, `generated_at` | 기본 정보. `family`는 NULL일 수 있음(확인 필요 SQ-13) |
 | `action_plan` | `{suggestion_id, order_no, sentence, evidence_count: {review, survey}}` 목록. 모든 문장이 근거를 하나 이상 가진다(FR-2.3, 2.4). 근거 목록은 문장당 수백~천 건이 될 수 있어 응답에 담지 않고 A-10으로 조회한다(SP-3) |
 | `next_survey` | `{status: "draft", questions: [{order_no, text, type, options}]}`. `status`는 항상 `draft`(FR-3.3) |
+
+**구현에서 정함 (Phase 5, 근거 목록과 액션플랜 API, 결정 2026-11-03, 사용자 승인)**
+- A-10 `GET /api/suggestions/{suggestion_id}/evidence?page=&page_size=&kind=`: 근거 = 문장의 `row_ids`가 가리키는 행들의 허용 목록의 합집합(저장하지 않고 계산, SQ-17). `page` 기본 1(1 이상), `page_size` 기본 50, 상한 200(가정, 근거 없음)이며 벗어나면 422. 정렬은 종류(review, survey) 다음 `evidence_id` 오름차순. 필터는 `kind`만. 리뷰 항목은 `{kind, evidence_id, rating, date}`, 설문 항목은 `{kind, evidence_id, synthetic_label}`이다. 작성자·`variant`·제목·본문은 없다. 없는 제안은 404.
+- 액션플랜 조회(A-6 대신 Phase 5용 가장 단순한 형태) `GET /api/families/{family_id}/action-plan?round_id=`: 제품군 x 회차의 가장 최근 성공한 리포트의 문장 목록 `{suggestion_id, order_no, sentence, evidence_count: {review, survey}, has_synthetic}`. `has_synthetic`은 설문(합성) 행을 근거로 하는 문장이면 참이다. 리포트가 없으면 200으로 `report`가 null이고 목록이 비어 있다. 제품군·회차가 없거나 임시 회차면 404, `round_id`가 없으면 422.
 
 ### 4.3 실행용 API (n8n이 호출, 설계 제안)
 
@@ -382,6 +398,7 @@ n8n은 "회차별 정기 실행과 단계 연결"을 맡습니다. 단계를 bac
 - 단계는 시간이 오래 걸릴 수 있어(LLM 호출) POST는 실행 기록을 만들고 바로 201로 돌려주며, 진행은 A-9로 확인합니다. 백그라운드 실행 방식은 설계 제안입니다.
 - 400은 `step`이 목록에 없거나 선행 단계가 끝나지 않았을 때 씁니다.
 - 구현 현황(Phase 3): `ad-judgement`만 있고 경로가 `/api/rounds/{round_id}/pipeline/ad-judgement`로 고정입니다(다른 step과 400은 아직 없음). 서버가 요청 안에서 끝까지 실행한 뒤 201을 돌려줍니다(백그라운드 실행 아님). 본문은 `{family_id?, review_ids}`이고 `review_ids`는 필수입니다. 비었거나 없거나, 존재하지 않는 번호가 있거나, 한 번에 보낼 상한(`AD_JUDGEMENT_MAX_ITEMS`, 기본 100건, 설계 제안)을 넘으면 422(`TOO_MANY_REVIEWS`, `UNKNOWN_REVIEW_IDS`)로 거절하고 아무것도 보내지 않습니다. 모델 이름이나 OpenAI 키가 없으면 500(`MODEL_NOT_CONFIGURED`, `LLM_NOT_CONFIGURED`)입니다. 오류 본문은 `detail={code, message}`이고 7.1절의 통일 형식은 Phase 1에서 만듭니다.
+- **구현에서 정함 (Phase 5, 단계 API, 결정 2026-11-03, 사용자 승인)**: `POST /api/rounds/{round_id}/pipeline/{step}`를 일반화했다. 기존 `ad-judgement` 경로는 그대로 유지한다(본문 `review_ids`). `analysis-snapshot`과 `action-suggestions`의 본문은 `{"family_id": 정수}`이며 필수다(스냅샷이 제품군 x 회차 단위라서 A-8의 `family_id?` 선택 규정 대신 이 두 단계에서는 필수). 목록에 없는 step은 400 `BAD_REQUEST`, 목록에 있지만 아직 구현되지 않은 step(`next-survey-draft`, `report-assembly`)도 400 `BAD_REQUEST`다. 회차·제품군이 없거나 임시 회차면 404. `action-suggestions`는 해당 제품군 x 회차의 스냅샷이 없으면 400 `STEP_NOT_READY`다. 서버가 요청 안에서 끝까지 실행한 뒤 201을 돌려준다.
 - 같은 단계를 다시 실행할 때 이전 결과를 어떻게 처리할지는 정해지지 않았습니다(확인 필요 SQ-8). 기본안(설계 제안)은 쌓는 것입니다: 실행마다 새 결과를 만들고 이전 결과를 지우지 않습니다. 읽기 규칙은 글마다 가장 최근의 성공한 판정을 쓴다. 최신 실행이 실패해도 이전 성공 판정이 있으면 그것을 쓴다. 실행을 합쳐서 읽는다(run 1과 run 2). (결정 2026-11-03, 사용자 승인)
 
 ## 5. 화면별 구성과 사용하는 API
@@ -463,6 +480,15 @@ n8n은 "회차별 정기 실행과 단계 연결"을 맡습니다. 단계를 bac
 | `suggestions[].row_ids` | 문자열 배열 | 입력 표에 있는 `row_id`만. 하나 이상 |
 
 - LLM은 근거 ID를 출력하지 않습니다. 코드가 `row_ids`에 해당하는 행들의 허용 목록을 합쳐 문장의 근거로 붙입니다(SP-3, FR-2.6).
+
+**구현에서 정함 (Phase 5, 호출 B, 결정 2026-11-03, 사용자 승인)**
+- 모델은 환경 값 `OPENAI_MODEL_SUGGEST`에서만 읽는다(없으면 500 `MODEL_NOT_CONFIGURED`). 프롬프트 버전은 `suggest-v1`이고 `app/llm/prompts/suggestion.py`의 고정 문구 지문을 테스트가 고정한다. 단가는 호출 A의 `OPENAI_PRICE_*`를 재사용한다.
+- 입력은 스냅샷의 표(행마다 `row_id`, `group`, `source`, `item`, `metrics`, `small_sample`)와 제품군·회차 이름뿐이다. 근거 ID, 리뷰 본문, 작성자는 보내지 않는다. 문장은 한국어 한 문장 120자 이내, 한 호출에서 최대 5문장이다.
+- 문장별 검증(`app/llm/suggestion_validators.py`): (a) `row_ids`가 비었거나 표에 없는 값이 있거나 행들의 근거 합집합이 비면 `dropped_no_evidence`. (b) 길이 초과, 한 문장이 아님, 중복, 5문장 초과, 설문(합성) 행을 참조했는데 문장에 "합성"이 없음, 판정 묶음의 `small_sample` 행을 참조했는데 문장에 "표본"이 없음은 `dropped_other`. (c) 문장 속 아라비아 숫자가 참조한 행의 지표 값과 일치하지 않으면 `dropped_number_mismatch`.
+- 숫자 일치 규칙: 문장의 숫자를 모두 뽑아 참조한 행의 지표 값과 비교한다. 쓴 소수 자리(0~2)로 반올림한 값이 같으면 통과한다(예: 비율 28.4는 28, 28.4, 28.40 통과, 29와 28.5는 실패). 문항·선택지 라벨, 회차·제품군 이름, 문항 코드(q09 등) 속 숫자는 비교에서 뺀다. 설문 선택지 행의 `선택지 번호`와 평점 행의 `평점`도 지표 값이라 "5점" 같은 표현이 통과한다.
+- 재시도: 일시 오류는 대기 1, 2, 4초로 최대 3회 다시 보낸다. 통과한 문장이 0개이거나 JSON·스키마가 깨지면 전체를 최대 2회 다시 요청한다(총 3번 요청). 통과한 문장이 하나도 없으면 실행은 `failed`(`error_code` `NO_SUGGESTIONS` 또는 `INVALID_OUTPUT`)이고 리포트를 만들지 않는다. 누적 비용이 한도를 넘으면 더 요청하지 않는다(`COST_LIMIT`).
+- 실행 기록 `counters`: `proposed`, `accepted`, `dropped_no_evidence`, `dropped_number_mismatch`, `dropped_other`(마지막으로 검증한 시도의 건수), `attempts`(전체 요청 횟수), `llm_calls`(일시 오류 재시도를 포함한 호출 수). `llm_call_log`의 `call_type`은 `B`다.
+- 비용 가드: 호출 전에 실제 프롬프트 글자 수로 (입력 + 출력 비용) x 재시도 배수 3을 계산해 실행당 한도(`SUGGESTION_COST_LIMIT_USD`, 기본 $0.5, 임시, NFR-C2)를 넘으면 422 `COST_LIMIT_EXCEEDED`로 호출하지 않는다. 계수(글자당 0.80토큰, 출력 문장당 120자 x 1.0 + 40토큰, 고정 20토큰)는 모두 가정이며 호출 B를 실제로 불러 본 적이 없어 실측으로 보정하지 않았다(`app/llm/cost.py` `SuggestionCalibration`).
 
 **호출 C: 다음 회차 문항 초안 (FR-3.2)**
 
@@ -629,12 +655,12 @@ prd.md 7절과 같습니다. 이 명세에는 아래를 만들지 않습니다.
 | SQ-6 | 리뷰를 회차에 대응시키는 방식(날짜 구간 등). 정해지지 않음. `round`에는 `period_start`, `period_end`를 NULL 허용으로 두었다. 리뷰 날짜(2017-06-24 ~ 2026-10-27, 실측)와 합성 설문의 회차가 맞지 않을 수 있다. 분기별 건수는 기준에 따라 다르다(2025Q1~2026Q3, 실측): 전체 리뷰는 분기당 55~139건, 본문이 있는 리뷰는 14~28건. **결정(2026-11-02): 회차는 달력 분기 기준이고 2026-Q1(2026-01-01~03-31)과 2026-Q2(2026-04-01~06-30) 2개로 한다.** 판정 대상 파일럿 표본 100건 중 각각 11건이다(실측). **리뷰의 회차 소속(Phase 4, 결정 2026-11-03, 사용자 승인):** 리뷰 날짜가 `round`의 `period_start`~`period_end` 안(양 끝 포함)이면 그 회차 소속이다. 제품군은 `product.family_id`로 거른다. 회차에 속하지 않는 리뷰는 집계에 넣지 않고 "포함되지 않은 N건"으로 건수만 보인다. | round, A-3 |
 | SQ-7 | `author`를 DB에 적재할지. **해결됨(결정): `author`는 DB에 적재하지 않는다.** 작성자 규칙이 필요해지면 그때 따로 정한다. 표시(FR-2.5)와 LLM 입력(NFR-S2)에서는 P-4로 이미 제외했고 이 명세의 DB 테이블에도 `author` 열이 없다. 단, NFR-S2와 P-4는 화면과 LLM 입력만 막으므로 코드 안의 규칙이 `author`를 쓰는 것은 금지되어 있지 않다. 적재하지 않으면 값이 DB에 없어 자연히 쓸 수 없고, 필요해지면 원본 CSV에서 다시 읽어야 한다. 작성자 반복(가장 많은 값이 53행, 실측)을 광고성 규칙에 쓸 수 있는지는 문서에 없다. 가려진 이름은 서로 다른 사람이 같은 값이 될 수 있어(같은 마스킹 값이 17행인 경우가 있음, 실측) 반복 신호로 믿기 어렵다 | 3.1 |
 | SQ-8 | n8n의 역할과 호출 방식(prd.md Q-4), 단계 이름·개수, 재실행 시 이전 결과 처리(정해지지 않음. 기본안은 쌓기: 결과 테이블이 `run_id`를 갖고 `ad_judgement`가 `model_name`·`prompt_version`을 두는 구조가 쌓기에 맞고 반복 실행 일치율 NFR-R1 측정에 필요하다. 덮어쓰면 이 측정이 어렵다), 실패 알림, 워크플로 파일 위치(정해지지 않음. 기본안은 `backend/n8n/`, 설계 제안). 실패 알림은 PRD에 없는 기능이라 두지 않고(기본안), n8n은 자체 재시도를 하지 않고 단계 안의 재시도만 쓴다(기본안, 6.3절) | 4.3, 7.5, 2절 |
-| SQ-9 | LLM 세부: 모델(광고성 판정은 `gpt-5.6-luna`로 기록함(prd.md Q-12, 2026-11-02). 문항·제안 호출은 정해지지 않음. 기본안은 호출 종류별 환경 값으로 빼서 키 점검 후 채움; 광고성 판정이 가장 많이 불리므로 비용 기준을 먼저 정한다. 판정 대상은 실행당 최대 310건, 실측), 구조화 출력 사용, 무작위성 값, 한 호출의 항목 수, 문장 길이 상한, 숫자 비교 규칙, 재시도 횟수·대기 시간, 가설당 문항 수. **결정(2026-11-02): 파일럿 규모의 가정값(묶음 10건, 일시 오류 재시도 3회, 검증 실패 재시도 2회, 대기 1·2·4초, 시간 제한 60초)을 유지하고 무작위성 값은 지정하지 않는다. 문장 길이·숫자 비교·가설당 문항 수는 Phase 5·6에서 정한다.** | 6절 |
+| SQ-9 | LLM 세부: 모델(광고성 판정은 `gpt-5.6-luna`로 기록함(prd.md Q-12, 2026-11-02). 문항·제안 호출은 정해지지 않음. 기본안은 호출 종류별 환경 값으로 빼서 키 점검 후 채움; 광고성 판정이 가장 많이 불리므로 비용 기준을 먼저 정한다. 판정 대상은 실행당 최대 310건, 실측), 구조화 출력 사용, 무작위성 값, 한 호출의 항목 수, 문장 길이 상한, 숫자 비교 규칙, 재시도 횟수·대기 시간, 가설당 문항 수. **결정(2026-11-02): 파일럿 규모의 가정값(묶음 10건, 일시 오류 재시도 3회, 검증 실패 재시도 2회, 대기 1·2·4초, 시간 제한 60초)을 유지하고 무작위성 값은 지정하지 않는다. 문장 길이·숫자 비교·가설당 문항 수는 Phase 5·6에서 정한다.** (2026-11-03) Phase 5 결정: 문장 길이 120자, 한 호출 최대 5문장, 숫자 일치 규칙은 6.2절 "구현에서 정함"(호출 B)에 적었다. 가설당 문항 수는 Phase 6에서 정한다. (결정 2026-11-03, 사용자 승인) | 6절 |
 | SQ-10 | **대부분 해결됨(결정):** Python 3.13, pip + `requirements.txt`, pytest, Vite, React Router, JavaScript, SQLAlchemy + Alembic, psycopg 3, `backend/.venv`. 남은 항목: 차트 라이브러리(SQ-1이 먼저), 상태 관리, ORM은 SQLAlchemy + Alembic으로 확정(두 DB를 모두 지원하고 메타데이터로 SQLite 테스트와 PostgreSQL 운영이 같은 정의를 쓰며 이력이 남는다. SQLModel은 이미 A-1~A-10 응답 형식을 따로 정의해 이점이 작다) | 1절, 9절 |
 | SQ-11 | `database/` 폴더의 역할, 원본 CSV 보관 위치와 추적 여부, Supabase 풀 크기·보안 설정. 정해지지 않음. 스키마는 ORM 메타데이터에서 만들기로 해서(1절) `database/`에 SQL 파일을 둘 이유는 약하다. 합성 응답 파일의 위치·저장 방식은 문서에 없다. **해결됨(결정):** 원본 CSV와 합성 응답 생성 결과는 `database/data/`에 두고 `.gitignore`로 추적에서 뺀다. `database/`에 SQL 파일은 두지 않는다(스키마는 ORM이 만든다). 지금 `.gitignore`에는 CSV·데이터 폴더 항목이 없어서 저장소를 만들기 전에 추가해야 한다 | 2절, 1절 |
 | SQ-12 | 네이버 블로그·카페 글의 열 구성과 테이블 | 3.2 |
-| SQ-13 | 회차 리포트가 회차 전체 단위인지 제품군 단위인지. 정해지지 않음. prd.md FR-3.1은 단위 없이 "액션플랜과 다음 회차 설문지가 함께 담긴다"고만 적었고, `report.family_id`를 NULL 허용으로 둔 것과 A-5가 `round_id`·`family_id`를 모두 선택 조건으로 받는 것은 두 단위를 모두 허용하는 모양일 뿐 결정이 아니다. 제품군 목록 자체가 미정(prd.md Q-3)이라 제품군별 리포트의 범위도 아직 정할 수 없다. 기본안(설계 제안): 회차 전체 리포트 한 부 안에 제품군별 절을 둔다. 이 경우 `report.family_id`는 NULL이고, 절 구분은 각 제안의 `snapshot_id`가 가진 `family_id`로 한다 | report |
+| SQ-13 | 회차 리포트가 회차 전체 단위인지 제품군 단위인지. 정해지지 않음. prd.md FR-3.1은 단위 없이 "액션플랜과 다음 회차 설문지가 함께 담긴다"고만 적었고, `report.family_id`를 NULL 허용으로 둔 것과 A-5가 `round_id`·`family_id`를 모두 선택 조건으로 받는 것은 두 단위를 모두 허용하는 모양일 뿐 결정이 아니다. 제품군 목록 자체가 미정(prd.md Q-3)이라 제품군별 리포트의 범위도 아직 정할 수 없다. 기본안(설계 제안): 회차 전체 리포트 한 부 안에 제품군별 절을 둔다. 이 경우 `report.family_id`는 NULL이고, 절 구분은 각 제안의 `snapshot_id`가 가진 `family_id`로 한다. **Phase 5 결정(2026-11-03, 사용자 승인): `action-suggestions` 실행마다 `report` 1행(`family_id` 포함)을 만들고 쌓는다. 화면은 가장 최근 성공한 실행을 보여준다. 회차 리포트로 합치는 방식은 Phase 6에서 정한다.** | report |
 | SQ-14 | 내보내기 형식(prd.md Q-8). 정해지지 않음. 기본안(설계 제안): HTML. 의사결정자는 시스템을 쓰지 않고 파일만 받으므로(prd.md 가정) 한 파일로 열리고 인쇄해 PDF로 저장할 수 있으면 충분하고, 추가 라이브러리 없이 만들 수 있으며 한글 글꼴은 브라우저가 처리한다. 조건: 스타일을 모두 담은 독립형 HTML 한 파일이고, 의사결정자 컴퓨터에서는 시스템에 접속할 수 없으므로 근거 ID는 링크가 아니라 텍스트로만 적는다. 파일에 적는 근거: 정해지지 않음. 문장 하나에 근거가 수백~천 건 붙을 수 있어(SP-3) 전체 ID를 적으면 읽기 어려운 파일이 된다. 기본안(설계 제안): 문장 끝에 근거 건수만 적는다(예: "근거 리뷰 187건"). 개별 근거 확인은 담당자가 시스템에서 하고(prd.md 기능 2), 근거 ID 검사(FR-2.4)는 리포트를 만들 때 시스템 안에서 끝난다. 일부 ID를 적는 안은 고르는 기준을 따로 정해야 해서 쓰지 않는다 | A-7 |
 | SQ-15 | 근거 뷰어에 리뷰 제목(title)을 보여줄지. 정해지지 않음. 기본안(설계 제안): 본문이 없을 때만 제목을 대신 보여준다. 확정하면 prd.md FR-2.5를 "본문(본문이 없으면 제목)"으로 고친다. 제목을 보여주면 prd.md NFR-S4·Q-10의 개인정보 점검을 제목 기준으로도 다시 본다. 제목만 있는 리뷰를 근거 허용 목록에서 빼는 안은 근거 개수 결정(SP-3)과 얽혀 있어 따로 정한다. prd.md FR-2.5는 "본문"이라고만 적었고 이 명세도 title을 뺀 채로 읽어 두 문서의 해석은 같다. 다만 제목만 있는 리뷰 13건(실측)이 근거가 되면 뷰어에 보여줄 본문이 비어 있다 | A-4 |
 | SQ-16 | 로그 보존 기간과 회전 방식. 정해지지 않음. 로그 위치와 남기지 않는 항목(7.4)은 이미 정했다. 기본안(설계 제안): 일 단위 파일 나누기 + 7일(가정) 보관. 7일은 근거가 없는 값이라 시연·파일럿 기간에 맞춰 조정한다. 크기 기준 회전은 로그 양이 적어 지금은 쓰지 않는다 | 7.3 |
-| SQ-17 | A-10 근거 목록의 `page_size` 기본값과 상한, `suggestion_evidence`를 저장할지 계산할지, 목록의 필터 범위. 모두 정해지지 않음. 기본안(설계 제안): `page_size` 기본 50, 상한 200(가정, 근거 없음). `suggestion_evidence`는 저장하지 않고 스냅샷의 허용 목록에서 계산한다. 필터는 `kind`(리뷰·설문)만 둔다 | A-10, 3.2 |
+| SQ-17 | A-10 근거 목록의 `page_size` 기본값과 상한, `suggestion_evidence`를 저장할지 계산할지, 목록의 필터 범위. 모두 정해지지 않음. 기본안(설계 제안): `page_size` 기본 50, 상한 200(가정, 근거 없음). `suggestion_evidence`는 저장하지 않고 스냅샷의 허용 목록에서 계산한다. 필터는 `kind`(리뷰·설문)만 둔다. **결정(2026-11-03, 사용자 승인): 기본안을 채택했다. `page_size` 기본 50·상한 200, `suggestion_evidence`는 저장하지 않고 계산, 필터는 `kind`만, 정렬은 종류 다음 `evidence_id`.** | A-10, 3.2 |

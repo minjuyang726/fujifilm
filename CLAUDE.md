@@ -80,6 +80,9 @@ Phase 0a에서 아래 명령을 실제로 실행해 확인했다. "확인 필요
 | 합성 설문 적재 | `python scripts/load_synthetic_survey.py` (backend에서). 파일만 점검하려면 `--check-only` | 임시 SQLite(pytest)와 Supabase에서 확인함(2026-11-03, 두 번 실행해도 행이 늘지 않음). 실행 전에 `alembic upgrade head`가 필요하고 사용자가 실행한다. `[파일럿-임시]` 회차와 `is_synthetic`이 거짓인 행은 건드리지 않는다 |
 | 제품군 시드 | `python scripts/seed_families.py` (backend에서). 읽기만 하려면 `--dry-run` | 임시 SQLite(pytest)에서만 확인함. 실행 전에 `alembic upgrade head`(→ `4d7cdf97c911`)가 필요하고 Supabase 실행은 사용자가 한 뒤 확인 필요. 대응표에 없는 상품은 건드리지 않는다 |
 | VOC 집계 검증 | `python scripts/verify_voc_dashboard.py` (backend에서) | 읽기 전용. 서비스 코드를 거치지 않은 SQL 집계와 A-3의 voc 응답을 제품군×회차 조합마다 비교하고 숫자만 출력한다. Supabase에서 확인함(2026-11-03, 4개 조합 모두 다른 칸 0) |
+| 스냅샷 검증 | `python scripts/verify_snapshot.py` (backend에서). 한 조합만: `--family-id 2 --round-label 2026-Q1` | 읽기 전용(스냅샷을 저장하지 않음). 서비스 코드를 거치지 않은 SQL 집계와 비교한다. Supabase에서 확인함(2026-11-03, 4개 조합 모두 다른 칸 0) |
+| 액션 제안 비용 추정 | `python scripts/estimate_suggestion_cost.py` (backend에서) | 읽기 전용, OpenAI 호출 없음. 계수는 가정이다. Supabase에서 실행함(2026-11-03) |
+| 스냅샷·액션 제안 실행 | `POST /api/rounds/{round_id}/pipeline/analysis-snapshot`, `POST /api/rounds/{round_id}/pipeline/action-suggestions` (본문 `{"family_id": 정수}`, `/docs` 화면에서), 결과는 `GET /api/runs/{run_id}`, `GET /api/families/{family_id}/action-plan?round_id=` | 가짜 클라이언트로만 확인함. 실행 전에 `alembic upgrade head`(→ `fd2af39e3e2a`)가 필요하다. `action-suggestions`의 실제 호출에는 `backend/.env`의 `OPENAI_MODEL_SUGGEST`, `OPENAI_API_KEY`, 단가 항목이 필요하다. 실제 호출은 사용자 승인 후에 한다 |
 | 광고성 판정 실행 | `POST /api/rounds/{round_id}/pipeline/ad-judgement`, `GET /api/runs/{run_id}` (`/docs` 화면에서) | 가짜 클라이언트로만 확인함. 본문의 `review_ids`는 필수이고 파일럿은 표본의 `review_ids`를 넣는다. 실제 실행에는 `backend/.env`의 `OPENAI_API_KEY`, `OPENAI_MODEL_AD`와 `round` 행 하나가 필요하다. 리뷰 데이터를 보내는 실제 호출은 prd.md Q-17-3과 G3 전에는 하지 않는다. 리뷰가 아닌 임의 문장의 시험 호출은 사용자가 허용한 횟수 안에서 예외다 |
 | n8n | 워크플로 파일은 `backend/n8n/` | 기본안(설계 제안). 실행 방법은 확인 필요 |
 
