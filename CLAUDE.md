@@ -67,7 +67,7 @@ Phase 0a에서 아래 명령을 실제로 실행해 확인했다. "확인 필요
 | backend 패키지 설치 | `pip install -r requirements.txt` (backend에서) | `requirements.txt` 작성함. 이 파일로 새로 설치하는 것은 확인 필요 |
 | backend 실행 | `uvicorn app.main:app --port 8000` (backend에서). 개발 중에는 `--reload` 추가 | `/docs`가 200으로 열리는 것을 확인함. `--reload`는 확인 필요 |
 | API 문서 화면 | `http://localhost:8000/docs` | 확인됨 |
-| backend 테스트 | `pytest` (backend에서). 설정은 `backend/pytest.ini` | 확인됨 (483개 통과, SQLite, 2026-11-03) |
+| backend 테스트 | `pytest` (backend에서). 설정은 `backend/pytest.ini` | 확인됨 (489개 통과, SQLite, 2026-11-03) |
 | Supabase 연결 확인 | `python scripts/check_db.py` (backend에서) | `DATABASE_URL`이 없을 때의 실패 메시지만 확인. 성공 경로는 사용자가 `backend/.env`를 채운 뒤 확인 필요 |
 | 마이그레이션 적용 | `alembic upgrade head` (backend에서). 설정은 `backend/alembic.ini`, `backend/migrations/` | 임시 SQLite에서 적용과 `alembic check`를 확인함(Phase 0b). Supabase 적용은 사용자가 실행한 뒤 확인 필요 |
 | frontend 패키지 설치 | `npm install` (frontend에서) | 확인됨 |

@@ -62,23 +62,57 @@ def test_paired_tie_matches_the_formula():
     assert cards.paired_tie(a, b, n) == (abs(d) <= 1.96 * variance ** 0.5)
 
 
-# ---------- 순위 라벨 ----------
-@pytest.mark.parametrize(
-    "tie12, tie23, expected",
-    [
-        (False, False, [("1순위", False), ("2순위", False), ("3순위", False)]),
-        (True, False, [("공동 1순위", True), ("2순위", False), ("3순위", False)]),
-        (False, True, [("1순위", False), ("공동 2순위", True), ("3순위", False)]),
-        (True, True, [("공동 1순위", True), ("공동 2순위", True), ("3순위", False)]),
-    ],
-)
-def test_rank_labels(tie12, tie23, expected):
-    assert cards.rank_labels(tie12, tie23, 3) == expected
+# ---------- 순위 그룹과 라벨 (그룹 대표 기준 비교) ----------
+def labels_for(counts: dict):
+    """코드 1~3의 선택 응답자 수로 만든 영역의 순위 라벨. 근거는 1..count의 포함 관계(앞 영역이 뒤 영역을 포함)다."""
+    table, evidence = make_table(counts)
+    return [(a.code, a.rank_label, a.joint) for a in cards.select_areas(table, evidence, LABELS)]
 
 
-def test_rank_labels_with_fewer_areas():
-    assert cards.rank_labels(True, True, 2) == [("공동 1순위", True), ("공동 2순위", True)]
-    assert cards.rank_labels(False, False, 1) == [("1순위", False)]
+def test_all_three_areas_indistinguishable_from_the_leader_are_joint_first():
+    # 60 vs 57: b=3 -> |d|=0.03 <= 0.0334, 60 vs 58도 같은 그룹
+    assert labels_for({"1": 60, "2": 58, "3": 57}) == [("1", "공동 1순위", True), ("2", "공동 1순위", True), ("3", "공동 1순위", True)]
+
+
+def test_second_joins_the_leader_and_third_is_distinct():
+    # 60 vs 50: b=10 -> |d|=0.10 > 0.0588 이라 구분된다
+    assert labels_for({"1": 60, "2": 57, "3": 50}) == [("1", "공동 1순위", True), ("2", "공동 1순위", True), ("3", "3순위", False)]
+
+
+def test_only_the_leader_is_distinct_and_second_and_third_are_grouped():
+    # 45 vs 60: 구분됨 -> 2위가 새 그룹의 대표. 42 vs 45: b=3 -> 같은 그룹
+    assert labels_for({"1": 60, "2": 45, "3": 42}) == [("1", "1순위", False), ("2", "공동 2순위", True), ("3", "공동 2순위", True)]
+
+
+def test_all_three_distinct():
+    # 60 vs 45(b=15), 45 vs 30(b=15)
+    assert labels_for({"1": 60, "2": 45, "3": 30}) == [("1", "1순위", False), ("2", "2순위", False), ("3", "3순위", False)]
+
+
+def test_comparison_is_with_the_group_leader_not_with_the_adjacent_area():
+    # 57 vs 60(b=3) 같은 그룹. 54 vs 인접 57은 b=3이라 구분되지 않지만, 대표 60과는 b=6(|d|=0.06 > 0.0466)이라 구분된다 -> 3순위
+    assert labels_for({"1": 60, "2": 57, "3": 54}) == [("1", "공동 1순위", True), ("2", "공동 1순위", True), ("3", "3순위", False)]
+
+
+def test_boundary_values_decide_the_group():
+    # 경계: b=13,c=5(n=100)는 우연 범위, b=14,c=5는 아니다. 선두와 둘째의 차이만 바꿔 라벨이 바뀌는 지점을 확인한다.
+    assert cards.paired_tie(*sets(13, 5), 100) is True and cards.paired_tie(*sets(14, 5), 100) is False
+    assert cards.rank_groups([*sets(13, 5)], 100) == [(1, 2, True), (1, 2, True)]
+    assert cards.rank_groups([*sets(14, 5)], 100) == [(1, 1, False), (2, 1, False)]
+
+
+def test_rank_k_is_the_leader_position_and_label_format():
+    assert cards.rank_label(1, False) == "1순위" and cards.rank_label(1, True) == "공동 1순위"
+    assert cards.rank_label(2, True) == "공동 2순위" and cards.rank_label(3, False) == "3순위"
+    assert cards.rank_groups([{1, 2, 3}], 10) == [(1, 1, False)]  # 영역이 하나뿐이면 단독 1순위
+
+
+def test_paired_stats_reports_the_numbers_used():
+    stats = cards.paired_stats(*sets(13, 5), 100)
+    assert (stats.b, stats.c, stats.n) == (13, 5, 100)
+    assert stats.difference == pytest.approx(0.08)
+    assert stats.critical == pytest.approx(1.96 * (((13 + 5) / 100 - 0.08 ** 2) / 100) ** 0.5)
+    assert stats.tie is True
 
 
 # ---------- 영역 선정 ----------
@@ -105,10 +139,10 @@ def test_row_ids_include_the_same_area_in_q07_when_present():
 
 
 def test_joint_labels_come_from_the_paired_test_on_respondent_level_selections():
-    # 1위(60명)와 2위(57명)는 응답자 3명 차이라 우연 범위(b=3, c=0, n=100: |d|=0.03 <= 0.0334), 3위(20명)는 확실히 낮다
+    # 1위(60명)와 2위(57명)는 응답자 3명 차이라 우연 범위(b=3, c=0, n=100: |d|=0.03 <= 0.0334), 3위(20명)는 선두와 구분된다
     table, evidence = make_table({"1": 60, "2": 57, "3": 20})
     areas = cards.select_areas(table, evidence, LABELS)
-    assert [(a.rank_label, a.joint) for a in areas] == [("공동 1순위", True), ("2순위", False), ("3순위", False)]
+    assert [(a.rank_label, a.joint) for a in areas] == [("공동 1순위", True), ("공동 1순위", True), ("3순위", False)]
 
 
 def test_a_clear_gap_gives_separate_ranks():
@@ -169,3 +203,33 @@ def test_review_card_without_the_small_sample_note():
 
 def test_review_card_is_none_when_rows_are_missing():
     assert cards.review_card({}) is None
+
+
+# ---------- q07과 q08의 같은 영역 매핑 ----------
+# 라벨 문구가 다르지만 같은 영역을 가리키는 쌍(합성 설문 정의의 q07 "사용법"과 q08 "사용법 안내")
+SAME_AREA_LABEL_ALIASES = {("사용법 안내", "사용법")}
+
+
+def test_q08_to_q07_mapping_points_at_the_same_area_in_the_survey_definition():
+    from app.services.synthetic_survey import QUESTIONS
+
+    options = {code: {o["code"]: o["label"] for o in opts} for code, _text, _kind, opts in QUESTIONS}
+    assert set(cards.Q08_TO_Q07_OPTION) == {"1", "2", "3", "4"}  # 개선할 점 없음(5)은 영역이 아니라 매핑에 없다
+    for q08_code, q07_code in cards.Q08_TO_Q07_OPTION.items():
+        q08_label, q07_label = options["q08"][q08_code], options["q07"][q07_code]
+        assert q08_label == q07_label or (q08_label, q07_label) in SAME_AREA_LABEL_ALIASES, (q08_code, q08_label, q07_label)
+
+
+def test_select_areas_uses_the_mapping_constant(monkeypatch):
+    table, evidence = make_table({"1": 60, "2": 40, "3": 20, "4": 10})
+    monkeypatch.setattr(cards, "Q08_TO_Q07_OPTION", {"1": "2", "2": "1", "3": "3", "4": "4"})
+    areas = cards.select_areas(table, evidence, LABELS)
+    assert areas[0].row_ids == ["survey:q08:1", "survey:q07:2"]
+    assert areas[1].row_ids == ["survey:q08:2", "survey:q07:1"]
+
+
+def test_an_option_without_a_mapping_gets_no_q07_row(monkeypatch):
+    table, evidence = make_table({"1": 60, "2": 40, "3": 20, "4": 10})
+    monkeypatch.setattr(cards, "Q08_TO_Q07_OPTION", {"2": "2"})
+    areas = cards.select_areas(table, evidence, LABELS)
+    assert areas[0].row_ids == ["survey:q08:1"] and areas[1].row_ids == ["survey:q08:2", "survey:q07:2"]
