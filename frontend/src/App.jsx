@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import ActionPlan from './ActionPlan.jsx'
 import Dashboard from './Dashboard.jsx'
 import ReviewStatsDemo from './ReviewStatsDemo.jsx'
 
@@ -6,6 +7,7 @@ import ReviewStatsDemo from './ReviewStatsDemo.jsx'
 // 포트폴리오 데모(plan.md 부록 A)는 내용을 바꾸지 않고 그대로 둔다.
 const TABS = [
   { id: 'dashboard', label: '제품군 대시보드' },
+  { id: 'plan', label: '액션플랜' },
   { id: 'demo', label: '쿠팡 리뷰 집계 (포트폴리오 데모)' },
 ]
 
@@ -31,6 +33,12 @@ function App() {
           <h1>제품군 대시보드</h1>
           <p className="note">읽기 전용 · 설문은 합성 응답 · 외부 VOC는 판정된 글 기준</p>
           <Dashboard />
+        </>
+      ) : tab === 'plan' ? (
+        <>
+          <h1>액션플랜</h1>
+          <p className="note">읽기 전용 · 문장마다 근거 건수 · 설문 근거는 합성 응답</p>
+          <ActionPlan />
         </>
       ) : (
         <>

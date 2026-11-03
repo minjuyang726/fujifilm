@@ -406,3 +406,91 @@ code {
   font-size: 12px;
   margin-top: 2px;
 }
+
+/* 액션플랜 탭 (plan.md Phase 5) */
+.plan-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  text-align: left;
+}
+
+.plan-item {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.plan-sentence {
+  color: var(--text-h);
+  font-size: 17px;
+}
+
+.plan-no {
+  font-weight: 600;
+}
+
+.plan-evidence {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.evidence-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.evidence-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.evidence-head h3 {
+  font-size: 16px;
+  margin: 0;
+  color: var(--text-h);
+}
+
+.evidence-items {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.pager {
+  display: flex;
+  gap: 8px;
+}
+
+.viewer {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--code-bg);
+  border-radius: 6px;
+}
+
+.viewer h4 {
+  margin: 0 0 4px;
+  color: var(--text-h);
+}
+
+.viewer-text {
+  white-space: pre-wrap;
+  color: var(--text-h);
+  font-size: 15px;
+}
