@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import ActionPlan from './ActionPlan.jsx'
 import Dashboard from './Dashboard.jsx'
+import Reports from './Reports.jsx'
 import ReviewStatsDemo from './ReviewStatsDemo.jsx'
 
-// 화면 두 개를 탭으로 오간다(라우터를 쓰지 않는다). 기본은 제품군 대시보드(S-2)이고,
+// 화면을 탭으로 오간다(라우터를 쓰지 않는다). 기본은 제품군 대시보드(S-2)이고,
 // 포트폴리오 데모(plan.md 부록 A)는 내용을 바꾸지 않고 그대로 둔다.
 const TABS = [
   { id: 'dashboard', label: '제품군 대시보드' },
   { id: 'plan', label: '액션플랜' },
+  { id: 'report', label: '리포트' },
   { id: 'demo', label: '쿠팡 리뷰 집계 (포트폴리오 데모)' },
 ]
 
@@ -39,6 +41,12 @@ function App() {
           <h1>액션플랜</h1>
           <p className="note">읽기 전용 · 문장마다 근거 건수 · 설문 근거는 합성 응답</p>
           <ActionPlan />
+        </>
+      ) : tab === 'report' ? (
+        <>
+          <h1>리포트</h1>
+          <p className="note">읽기 전용 · 액션플랜과 다음 회차 설문지(초안) · 설문 근거와 설문 수치는 합성 응답</p>
+          <Reports />
         </>
       ) : (
         <>

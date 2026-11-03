@@ -123,7 +123,7 @@ function EvidenceList({ suggestionId, kind, onClose }) {
   )
 }
 
-function PlanSentence({ item, open, onOpen }) {
+export function PlanSentence({ item, open, onOpen }) {
   const { review, survey } = item.evidence_count
   return (
     <li className="plan-item">
