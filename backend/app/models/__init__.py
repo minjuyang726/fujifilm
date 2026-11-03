@@ -3,6 +3,7 @@ from app.models.analysis import ActionSuggestion, AnalysisSnapshot, Report
 from app.models.base import Base
 from app.models.draft import Hypothesis, NextSurveyQuestion
 from app.models.llm_call_log import LlmCallLog
+from app.models.naver import NaverSearchCount
 from app.models.pipeline_run import PipelineRun
 from app.models.product import Product
 from app.models.review import Review
@@ -16,6 +17,7 @@ __all__ = [
     "Base",
     "Hypothesis",
     "LlmCallLog",
+    "NaverSearchCount",
     "NextSurveyQuestion",
     "PipelineRun",
     "Product",
