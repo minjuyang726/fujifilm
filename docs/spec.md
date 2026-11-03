@@ -393,7 +393,7 @@ pipeline_run 1 ─ N ad_judgement | analysis_snapshot | report | llm_call_log
 **구현에서 정함 (Phase 6, 리포트 API, 결정 2026-11-03, 사용자 승인)**
 - A-5 `GET /api/reports?round_id=&family_id=`: 리포트 목록(`report_id` 내림차순). 항목은 `{report_id, round_id, family_id, generated_at}`에 `suggestion_count`, `question_count`를 더했다(화면이 문항이 있는 가장 최근 리포트를 고르기 위해).
 - A-6 `GET /api/reports/{report_id}`: `{report_id, round, family, generated_at, action_plan, next_survey}`. `action_plan` 항목은 `{suggestion_id, order_no, sentence, evidence_count: {review, survey}, has_synthetic, sources}`다(`sources`는 근거 행의 출처 "합성"/"실측"). `next_survey`는 `{status: "draft", run_id, questions}`이고 문항은 `{order_no, text, type, options, hypothesis_id, hypothesis_kind, hypothesis_statement}`다. 문항은 해당 리포트의 가장 큰 `run_id`의 것만 담고, 초안이 없으면 문항 목록이 비어 있다.
-- A-7 `GET /api/reports/{report_id}/export?format=html`: `format`이 없으면 422, `html`이 아니면 400 `UNSUPPORTED_FORMAT`, 리포트가 없으면 404. 응답은 `text/html` 독립형 한 파일이고 `Content-Disposition: attachment; filename="report-{id}.html"`이다. 생성한 HTML에서 외부 참조(`src`, `href`, `url(`, `http`, 스크립트)가 하나라도 나오면 내보내지 않고 500으로 처리한다.
+- A-7 `GET /api/reports/{report_id}/export?format=html`: `format`이 없으면 422, `html`이 아니면 400 `UNSUPPORTED_FORMAT`, 리포트가 없으면 404. 응답은 `text/html` 독립형 한 파일이고 `Content-Disposition: attachment; filename="report-{id}.html"`이다. 생성한 HTML을 표준 라이브러리 HTML 파서로 검사해 외부 참조(URL 속성 `src`/`href` 등, `on*` 속성, `url()`·`@import`·`http(s)://`를 담은 속성이나 `<style>` 내용, script/link/iframe/img 등 태그)가 하나라도 나오면 내보내지 않고 500으로 처리한다. 본문 글은 이스케이프되어 있으므로 글 속의 `http://`나 `src=` 같은 문자열은 검사 대상이 아니다.
 
 ### 4.3 실행용 API (n8n이 호출, 설계 제안)
 
