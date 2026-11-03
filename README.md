@@ -1,0 +1,75 @@
+# 정기 설문 폐루프 에이전트 (한국후지필름형)
+
+CX 담당자가 제품군별 대시보드로 설문과 외부 VOC를 보고, 액션 제안의 근거를 추적하고, 액션플랜과 다음 회차 설문지(초안)가 담긴 회차 리포트를 내보내는 웹 서비스입니다. 개인 프로젝트이고 배포하지 않았습니다.
+
+> 이 저장소의 설문 응답은 **전부 합성 데이터**입니다. 설문에서 나온 수치는 성과가 아니며 화면에 "합성" 라벨이 고정으로 붙습니다. 정본 문서는 `docs/`와 `CLAUDE.md`입니다.
+
+## 파이프라인
+
+문항 → 취합 → 분석 → 액션플랜 → 다음 문항 초안
+
+1. **취합**: 쿠팡 리뷰(CSV 적재)와 합성 설문 응답을 DB에 적재합니다.
+2. **분석**: 코드가 제품군 × 회차별 계산표(스냅샷)를 만듭니다. 리뷰는 광고성 확률(LLM, `ad-v2`)을 구해 가중치 `max(0.1, 1 − p)`로 집계하고, 가중·비가중 집계를 모두 보여 줍니다.
+3. **액션플랜**: LLM(`suggest-v3`)이 계산표만 보고 문장을 쓰고, 코드가 참조 행·숫자 일치·표현 규칙을 검증하며 근거를 붙입니다. 근거가 없는 문장은 리포트에 담지 않습니다.
+4. **다음 문항 초안**: 코드 규칙이 불확실·모순 가설을 찾고, LLM(`question-v2`)이 가설 진술문을 보고 문항 초안(상태는 항상 `draft`)을 씁니다.
+5. **리포트**: 액션플랜과 문항 초안을 한 화면에 보이고, 인터넷 없이 열리는 독립형 HTML 한 파일로 내보냅니다.
+
+원칙: 계산은 코드가 하고 LLM은 코드가 계산한 표를 서술만 합니다. 광고성 판정은 글을 지우지 않고 가중치만 낮춥니다.
+
+## 기술 스택
+
+FastAPI, SQLAlchemy·Alembic, PostgreSQL(Supabase), React·Vite, pytest, OpenAI API (모델 `gpt-5.6-luna`). 근거: `CLAUDE.md`, `docs/spec.md`.
+
+## 실행 명령 (PowerShell, `CLAUDE.md` 표 기준)
+
+backend 폴더에서:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+alembic upgrade head          # DB 마이그레이션 (backend/.env의 DATABASE_URL 필요)
+uvicorn app.main:app --port 8000   # API 문서: http://localhost:8000/docs
+pytest
+```
+
+frontend 폴더에서:
+
+```powershell
+npm.cmd install
+npm.cmd run dev               # http://localhost:5173
+npm.cmd run build
+npm.cmd run lint
+```
+
+주요 스크립트는 backend 폴더에서 `python scripts/<이름>.py`로 실행합니다: `load_reviews`, `pilot_sample`, `generate_synthetic_survey`, `load_synthetic_survey`, `seed_families`, `verify_voc_dashboard`, `verify_snapshot`, `verify_hypotheses`, `estimate_suggestion_cost`, `estimate_question_cost`. 각 스크립트의 인수와 확인 상태는 `CLAUDE.md`의 실행 명령 표에 있습니다. 환경 값은 `backend/.env`(비밀 값)와 `frontend/.env`(backend 주소)에 넣고, 항목 이름은 각 폴더의 `.env.example`에 있습니다. 키와 접속 문자열은 저장소에 올리지 않습니다.
+
+## 검증 결과
+
+| 항목 | 값 | 근거 |
+| --- | --- | --- |
+| 자동 테스트 | pytest 435개 통과 (임시 SQLite, LLM은 가짜 응답) | `CLAUDE.md`, 2026-11-03 실행 |
+| 쿠팡 리뷰(실측) | 1,302건, 그중 제목 또는 본문이 있는 글 310건 | DB `review`, `CLAUDE.md` |
+| 설문(합성) | 문항 10개, 회차당 응답 100건, 제품군 구분 없이 회차 공통 | DB `survey_*`, `docs/plan.md` |
+| 광고성 판정 파일럿 | 100건, 호출 10회, 입력 18,540·출력 2,908 토큰, 약 $0.0072, 호출 지연 합계 약 46초 | DB `llm_call_log`, `docs/plan.md` |
+| 사람 라벨 비교 | 31건 중 27건 일치, 정밀도 2/6, 재현율 2/2 (광고성 라벨 2건뿐인 거친 값) | `docs/plan.md` |
+| 가중·비가중 평균 평점 차이 | −0.0119 (가중치 하한 0.1 기준, 파일럿 100건) | `docs/prd.md` Q-7 |
+| 가설 규칙 SQL 재계산 | 제품군 2 × 회차 2 조합 모두 불일치 0건 | `docs/plan.md`, `backend/scripts/verify_hypotheses.py` |
+| 판정 묶음 건수 | 제품군 1: 2026-Q1 7건·2026-Q2 4건, 제품군 2: 2026-Q1 4건·2026-Q2 7건 | DB `analysis_snapshot` |
+
+**화면의 모든 액션 문장은 현재 검증기를 통과했습니다.** 제품군 1의 두 회차는 2026-11-03에 호출 B·C를 다시 실행했고(실행 #21~#24, 리포트 #6·#7), 4개 조합의 최신 리포트 문장 전체를 `evaluate_sentence`와 `filter_suggestions`에 다시 통과시켜 확인했습니다(근거: 같은 날 읽기 전용 점검, DB `action_suggestion`).
+
+## 한계
+
+- 설문 응답은 합성이고 제품군 구분 없이 회차 공통(`family_id` 없음)입니다. 두 제품군의 설문 수치는 같습니다.
+- 광고성 판정 표본이 작습니다. 회차·제품군별 판정 묶음은 4~7건이고, 사람 라벨 비교는 31건이며 광고성 라벨이 2건뿐입니다. 가중 전후 차이가 작아 가중 효과는 주장하지 않습니다.
+- 임계값은 근거 없는 가정입니다: 표본 적음 30건 미만, 1·2위 차이 5%p, 만족 60%·추천 안 함 50%, 가중치 하한 0.1.
+- 문항 품질은 평가하지 않았습니다. 코드 검증은 형식·숫자·금지 단어만 봅니다.
+- 문항 보기 표현이 겹칠 수 있습니다(예: "가끔 사용함"과 "때때로 사용함"). 숫자 금지 규칙 때문에 원문항의 구간 보기와 후속 문항의 보기를 비교할 수 없습니다.
+- 반복 호출 일치율(NFR-R1)은 확인하지 못했습니다. 정기 실행(n8n, Phase 7)은 구현하지 않았습니다(`docs/plan.md`).
+- 네이버 검색 건수 수집(Phase 0d 제한 구현)은 구현은 되었으나 미실행이며 약관 적합성을 보증하지 않습니다.
+- 개인정보·약관 등 법적 적합성은 이 코드와 문서로 보증하지 않습니다(`CLAUDE.md`).
+
+## 문서
+
+`docs/service-definition.md`(배경), `docs/mvp.md`(범위), `docs/prd.md`(요구사항), `docs/spec.md`(기술 명세), `docs/plan.md`(Phase 계획과 진행 기록), `docs/sql_crosscheck.md`(SQL 교차검증).
