@@ -22,7 +22,7 @@ def test_upgrade_head_and_check_pass_on_temp_sqlite(tmp_path):
     check = run_alembic(db, "check")
     assert check.returncode == 0, check.stderr[-500:] + check.stdout[-500:]
     heads = run_alembic(db, "heads")
-    assert "b81f6d3a9c20" in heads.stdout
+    assert "c50aa015e072" in heads.stdout
 
 
 def test_downgrade_one_step_and_upgrade_again(tmp_path):

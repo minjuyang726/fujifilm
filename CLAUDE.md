@@ -47,7 +47,7 @@
 - 개인정보가 들어 있을 수 있는 데이터(리뷰 본문, 작성자)는 저장소, 채팅, 문서, 로그에 옮겨 쓰지 않는다. 외부 서비스(OpenAI, Supabase)로 보내는 항목은 필요한 열만 허용 목록으로 고른다.
 - 법적 적합성(개인정보 보호법, 국외 이전, 크롤링 약관 등)은 코드나 이 문서로 보증할 수 없다. 판단이 필요한 항목은 prd.md Q-17에 두고 전문가 확인을 요청한다.
 - **쿠팡 리뷰 수집**: 이미 수집된 CSV만 쓴다. 쿠팡 이용약관을 확인하기 전까지 추가 수집을 하지 않는다.
-- **네이버 수집(Phase 0d)**: 네이버 API 약관을 확인하기 전까지 시작하지 않는다.
+- **네이버 수집**: 취소됨(결정 2026-11-03, 사용자).
 - **리뷰 본문을 OpenAI로 보내는 일**: 310건 전체 판정은 prd.md Q-17-3이 해결된 뒤에만 한다. 그 전에는 파일럿 100건으로 제한하고 이름이 든 본문은 보내지 않는다. OpenAI의 데이터 사용·보관 조건(학습 사용 여부 등)은 사용자가 직접 확인한다.
 - **공모전 제출물**: 리뷰 원문을 넣지 않는다. 집계 수치와 가공한 예시만 쓴다.
 
@@ -68,7 +68,7 @@ Phase 0a에서 아래 명령을 실제로 실행해 확인했다. "확인 필요
 | backend 패키지 설치 | `pip install -r requirements.txt` (backend에서) | `requirements.txt` 작성함. 이 파일로 새로 설치하는 것은 확인 필요 |
 | backend 실행 | `uvicorn app.main:app --port 8000` (backend에서). 개발 중에는 `--reload` 추가 | `/docs`가 200으로 열리는 것을 확인함. `--reload`는 확인 필요 |
 | API 문서 화면 | `http://localhost:8000/docs` | 확인됨 |
-| backend 테스트 | `pytest` (backend에서). 설정은 `backend/pytest.ini` | 확인됨 (435개 통과, SQLite, 2026-11-03) |
+| backend 테스트 | `pytest` (backend에서). 설정은 `backend/pytest.ini` | 확인됨 (421개 통과, SQLite, 2026-11-03) |
 | Supabase 연결 확인 | `python scripts/check_db.py` (backend에서) | `DATABASE_URL`이 없을 때의 실패 메시지만 확인. 성공 경로는 사용자가 `backend/.env`를 채운 뒤 확인 필요 |
 | 마이그레이션 적용 | `alembic upgrade head` (backend에서). 설정은 `backend/alembic.ini`, `backend/migrations/` | 임시 SQLite에서 적용과 `alembic check`를 확인함(Phase 0b). Supabase 적용은 사용자가 실행한 뒤 확인 필요 |
 | frontend 패키지 설치 | `npm install` (frontend에서) | 확인됨 |
@@ -83,7 +83,6 @@ Phase 0a에서 아래 명령을 실제로 실행해 확인했다. "확인 필요
 | 스냅샷 검증 | `python scripts/verify_snapshot.py` (backend에서). 한 조합만: `--family-id 2 --round-label 2026-Q1` | 읽기 전용(스냅샷을 저장하지 않음). 서비스 코드를 거치지 않은 SQL 집계와 비교한다. Supabase에서 확인함(2026-11-03, 4개 조합 모두 다른 칸 0) |
 | 액션 제안 비용 추정 | `python scripts/estimate_suggestion_cost.py` (backend에서) | 읽기 전용, OpenAI 호출 없음. 계수는 가정이다. Supabase에서 실행함(2026-11-03) |
 | 스냅샷·액션 제안 실행 | `POST /api/rounds/{round_id}/pipeline/analysis-snapshot`, `POST /api/rounds/{round_id}/pipeline/action-suggestions` (본문 `{"family_id": 정수}`, `/docs` 화면에서), 결과는 `GET /api/runs/{run_id}`, `GET /api/families/{family_id}/action-plan?round_id=` | 가짜 클라이언트(pytest)와, 제품군 2 × 2026-Q1 한 조합의 실제 호출 1회(2026-11-03, 사용자 승인)로 확인함. 실행 전에 `alembic upgrade head`(→ `fd2af39e3e2a`)가 필요하다. `action-suggestions`의 실제 호출에는 `backend/.env`의 `OPENAI_MODEL_SUGGEST`, `OPENAI_API_KEY`, 단가 항목이 필요하다. 실제 호출은 사용자 승인 후에 한다 |
-| 네이버 검색 건수 수집 | `python scripts/collect_naver_counts.py --query "검색어"` (backend에서, 여러 번 가능, `--dry-run`은 호출만 하고 저장하지 않음) | 가짜 응답(pytest)으로만 확인함. 실행 전에 `alembic upgrade head`(→ `b81f6d3a9c20`)가 필요하다. `backend/.env`의 `NAVER_API_CLIENT_ID`, `NAVER_API_CLIENT_SECRET`이 필요하다. 질의 x (blog, cafearticle)마다 네이버 호출 1회. 검색 결과 총 건수만 저장하고 글 내용은 읽지도 저장하지도 LLM에 보내지도 않는다. 실제 호출은 사용자 승인 후에 한다 |
 | 가설 검증 | `python scripts/verify_hypotheses.py` (backend에서) | 읽기 전용(가설을 저장하지 않음). 규칙 결과를 SQL 재계산과 비교하고 조합별 가설 목록을 출력한다. Supabase에서 확인함(2026-11-03, 4개 조합 모두 같음) |
 | 문항 초안 비용 추정 | `python scripts/estimate_question_cost.py` (backend에서) | 읽기 전용, OpenAI 호출 없음. 계수는 가정이다. Supabase에서 실행함(2026-11-03) |
 | 문항 초안·리포트 실행과 조회 | `POST /api/rounds/{round_id}/pipeline/next-survey-draft`, `POST .../pipeline/report-assembly` (본문 `{"family_id": 정수}`), `GET /api/reports`, `GET /api/reports/{report_id}`, `GET /api/reports/{report_id}/export?format=html` | 가짜 클라이언트(pytest)로만 확인함. 실행 전에 `alembic upgrade head`(→ `c50aa015e072`)가 필요하다. `next-survey-draft`의 실제 호출에는 `backend/.env`의 `OPENAI_MODEL_QUESTION`, `OPENAI_API_KEY`, 단가 항목이 필요하다. 실제 호출은 사용자 승인 후에 한다 |
