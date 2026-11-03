@@ -2,7 +2,7 @@
 
 제외 사유는 세 가지다(plan.md Phase 5, counters 이름):
 - dropped_no_evidence: row_ids가 비었거나 표에 없는 row_id가 있거나, 행들의 근거 합집합이 비어 있다(FR-2.4).
-- dropped_number_mismatch: 문장 속 숫자가 참조한 행의 값과 일치하지 않는다(FR-0.3).
+- dropped_number_mismatch: 문장 속 숫자가 참조한 행의 값과 일치하지 않거나, 한글 수량 표현(절반, 두 배, 세 건 등)이 있다(FR-0.3).
 - dropped_other: 길이 초과, 한 문장이 아님, 합성 표기 누락, 표본 표기 누락, 중복, 문장 개수 초과.
 숫자 비교 규칙(결정 2026-11-03): 문장의 아라비아 숫자를 모두 뽑아 참조한 행의 지표 값과 비교한다. 쓴 소수 자리(0~2)로
 반올림한 값이 일치하면 통과한다(예: 비율 48.96은 49, 49.0, 48.96 모두 통과). 문항·선택지 라벨, 회차 이름, 제품군 이름, 문항 코드 속 숫자는
@@ -25,6 +25,21 @@ DROPPED_OTHER = "dropped_other"
 
 SYNTHETIC_WORD = "합성"
 SMALL_SAMPLE_WORD = "표본"
+
+# 한글 수량 표현(FR-0.3: 서술 속 수치는 표의 값과 일치해야 하는데, 아라비아 숫자 검사만으로는 한글로 쓴 수량을 잡지 못한다).
+# 표현 목록은 사용자가 정했다(결정 2026-11-03): (1) 절반, 반절, 과반, 곱절, 몇 배, (2) 고유어 수 + 단위
+# (한|두|세|네|다섯|여섯|일곱|여덟|아홉|열 + 건|명|점|개|배|문항|가지), (3) 한자어 수 + 단위
+# (일|이|삼|사|오|육|칠|팔|구|십|백|천|만 + 건|명|점|개|배|문항|퍼센트).
+# 단위가 다른 단어의 일부일 때(만족한 건수, 점수, 개선, 배송)는 잡지 않도록 수 앞에는 한글이 없어야 하고
+# 단위 뒤에는 한글이 없거나 조사가 와야 한다. "대부분", "소수", "일부" 같은 질적 표현은 막지 않는다(수치가 아니다).
+# 알려진 한계: 지시어 "이"(이 점, 이 건)처럼 한자어 수와 같은 글자가 쓰인 정상 문장도 제외될 수 있다(사용자 목록을 그대로 따름).
+_QUANTITY_WORDS = re.compile(r"절반|반절|과반|곱절|몇\s*배")
+# 고유어 수: 사용자 목록(한~열)에 더해 열한~열아홉, 스물 이상(스무, 스물, 서른, 마흔, 쉰, 예순, 일흔, 여든, 아흔)도 같은 종류라 포함한다.
+_NATIVE_NUMBER = r"(?:(?:스무|스물|서른|마흔|쉰|예순|일흔|여든|아흔|열)?(?:다섯|여섯|일곱|여덟|아홉|한|두|세|네)|열|스무|스물|서른|마흔|쉰|예순|일흔|여든|아흔)"
+_SINO_NUMBER = r"(?:일|이|삼|사|오|육|칠|팔|구|십|백|천|만)+"  # 이십, 삼백 같은 합성 수도 잡는다
+_AFTER_UNIT = r"(?:(?![가-힣])|(?=[이가을를은는의도만씩으과와에인다로라였입]))"
+_NATIVE_QUANTITY = re.compile(rf"(?<![가-힣]){_NATIVE_NUMBER}\s*(?:문항|가지|건|명|점|개|배){_AFTER_UNIT}")
+_SINO_QUANTITY = re.compile(rf"(?<![가-힣]){_SINO_NUMBER}\s*(?:문항|퍼센트|건|명|점|개|배){_AFTER_UNIT}")
 
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
 _THOUSANDS = re.compile(r"(?<=\d),(?=\d{3})")
@@ -87,6 +102,11 @@ def _matches(token: str, values: list[float]) -> bool:
     return False
 
 
+def has_korean_quantity(sentence: str) -> bool:
+    """문장에 한글 수량 표현이 있으면 참. 라벨(문항·선택지 이름 등)에 든 글자는 미리 뺀 문장을 넘긴다."""
+    return bool(_QUANTITY_WORDS.search(sentence) or _NATIVE_QUANTITY.search(sentence) or _SINO_QUANTITY.search(sentence))
+
+
 def numbers_match(sentence: str, rows: list[dict], family: str, round_label: str) -> bool:
     labels = [family, round_label]
     values: list[float] = []
@@ -111,7 +131,10 @@ def check_sentence(
     if not sentence or len(sentence) > MAX_SENTENCE_CHARS or "\n" in sentence or len(_SENTENCE_END.findall(sentence)) > 1:
         return DROPPED_OTHER
     rows = [rows_by_id[row_id] for row_id in dict.fromkeys(row_ids)]
-    # (4) 문장 속 숫자가 참조한 행의 값과 일치한다 (FR-0.3)
+    # (4) 문장 속 숫자가 참조한 행의 값과 일치한다 (FR-0.3). 한글 수량 표현은 비교할 수 없으므로 제외한다.
+    labels = [family, round_label] + [part.strip() for row in rows for part in row["item"].split(" — ")]
+    if has_korean_quantity(_strip_labels(sentence, labels)):
+        return DROPPED_NUMBER_MISMATCH
     if not numbers_match(sentence, rows, family, round_label):
         return DROPPED_NUMBER_MISMATCH
     if any(row["source"] == SYNTHETIC_WORD for row in rows) and SYNTHETIC_WORD not in sentence:

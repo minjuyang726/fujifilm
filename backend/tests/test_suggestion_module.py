@@ -8,7 +8,7 @@ from app.llm.cost import Prices, SUGGESTION_CALIBRATION, estimate_suggestion_cos
 from app.llm.output_schemas.suggestion import SUGGESTION_SCHEMA
 from app.llm.prompts import suggestion as prompt
 from app.llm.suggestion_validators import (
-    BAD_SCHEMA, DROPPED_NO_EVIDENCE, DROPPED_NUMBER_MISMATCH, DROPPED_OTHER, NOT_JSON,
+    has_korean_quantity, BAD_SCHEMA, DROPPED_NO_EVIDENCE, DROPPED_NUMBER_MISMATCH, DROPPED_OTHER, NOT_JSON,
     check_sentence, filter_suggestions, numbers_match, parse_suggestions,
 )
 
@@ -44,14 +44,14 @@ def check(sentence, row_ids):
 
 # ---------- 프롬프트와 스키마 ----------
 def test_prompt_version_and_fingerprint_are_pinned():
-    assert prompt.PROMPT_VERSION == "suggest-v1"
+    assert prompt.PROMPT_VERSION == "suggest-v2"
     # 문구를 바꾸면 이 값과 PROMPT_VERSION을 같이 바꾼다
     assert prompt.prompt_fingerprint() == EXPECTED_FINGERPRINT
 
 
 def test_prompt_contains_the_required_rules():
     text = prompt.SYSTEM_PROMPT
-    for needle in ("아라비아 숫자", "표에 없는 숫자를 만들지 않는다", "합성", "표본", "120자", "최대 5개", "row_ids"):
+    for needle in ("아라비아 숫자", "표에 없는 숫자를 만들지 않는다", "합성", "표본", "120자", "최대 5개", "row_ids", "절반, 두 배, 세 건 같은 한글 수량 표현은 쓰지 않는다"):
         assert needle in text
     for forbidden in ("author", "variant"):  # 영어 키 이름은 쓰지 않는다
         assert forbidden not in text
@@ -176,4 +176,58 @@ def test_cost_estimator_formula():
     assert SUGGESTION_CALIBRATION.retry_multiplier == 3
 
 
-EXPECTED_FINGERPRINT = "d3352304f89664f3a4a8210ccaac26698bd8a823afdf9612f56caa8ee610758b"
+# ---------- 한글 수량 표현 (FR-0.3) ----------
+KOREAN_QUANTITY_SENTENCES = [
+    "합성 설문에서 추천 응답이 절반에 가깝다.",
+    "합성 설문에서 추천 응답이 반절이다.",
+    "합성 설문에서 추천 응답이 과반이다.",
+    "합성 설문에서 추천 응답이 곱절로 늘었다.",
+    "합성 설문에서 추천 응답이 몇 배 많다.",
+    "합성 설문에서 추천 응답이 두 배다.",
+    "합성 설문에서 추천 응답이 세 건 있다.",
+    "합성 설문에서 추천 응답이 다섯 명이다.",
+    "합성 설문에서 만족이 네 점이다.",
+    "합성 설문에서 두 가지를 개선한다.",
+    "합성 설문에서 열 개 문항이 있다.",
+    "합성 설문에서 추천 응답이 삼 건이다.",
+    "합성 설문에서 추천 응답이 이십 명이다.",
+    "합성 설문에서 추천 응답이 오 점이다.",
+    "합성 설문에서 추천 응답이 삼십 퍼센트다.",
+    "합성 설문에서 추천 응답이 백 개다.",
+]
+
+
+@pytest.mark.parametrize("sentence", KOREAN_QUANTITY_SENTENCES)
+def test_korean_quantity_expressions_are_dropped_as_number_mismatch(sentence):
+    assert has_korean_quantity(sentence)
+    assert check(sentence, ["survey:q09:1"]) == DROPPED_NUMBER_MISMATCH
+
+
+def test_korean_quantity_check_runs_even_when_the_arabic_numbers_match():
+    # 49건은 표와 같지만 한글 수량(절반)이 함께 있으면 제외한다
+    assert check("합성 설문에서 추천 응답이 49건으로 절반에 가깝다.", ["survey:q09:1"]) == DROPPED_NUMBER_MISMATCH
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "합성 응답에서 q09 예 49건(49%)이라 추천 경로를 넓히는 안을 검토한다.",
+        "합성 설문에서 만족한 건수가 49건이라 유지한다.",  # '만족한 건수'는 수량이 아니다
+        "합성 설문에서 점수 개선이 필요하며 추천 응답은 49건이다.",  # 점수, 개선
+        "합성 설문에서 대부분 추천하고 소수만 미추천이며 추천은 49건이다.",  # 질적 표현은 막지 않는다
+        "합성 설문의 일부 응답을 보면 추천이 49건이다.",
+    ],
+)
+def test_normal_and_qualitative_sentences_are_not_blocked(sentence):
+    assert not has_korean_quantity(sentence)
+    assert check(sentence, ["survey:q09:1"]) is None
+
+
+def test_labels_are_removed_before_the_korean_quantity_check():
+    rows = {"x": {"row_id": "x", "group": "설문", "source": "합성", "item": "개선할 점 — 한 가지 이상", "metrics": {"응답 수": 3}, "small_sample": False}}
+    evidence = {"x": {"kind": "survey", "ids": [1]}}
+    # 선택지 라벨에 든 '한 가지'는 라벨이므로 수량 표현으로 보지 않는다
+    assert check_sentence({"sentence": "합성 설문의 한 가지 이상 응답은 3건이다.", "row_ids": ["x"]}, rows, evidence, FAMILY, ROUND) is None
+
+
+EXPECTED_FINGERPRINT = "89d9ba3b327fa83f98a9f356e582b394dbd62d81bed11cf10d8a4a977adfb811"

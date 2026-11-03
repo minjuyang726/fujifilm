@@ -482,9 +482,9 @@ n8n은 "회차별 정기 실행과 단계 연결"을 맡습니다. 단계를 bac
 - LLM은 근거 ID를 출력하지 않습니다. 코드가 `row_ids`에 해당하는 행들의 허용 목록을 합쳐 문장의 근거로 붙입니다(SP-3, FR-2.6).
 
 **구현에서 정함 (Phase 5, 호출 B, 결정 2026-11-03, 사용자 승인)**
-- 모델은 환경 값 `OPENAI_MODEL_SUGGEST`에서만 읽는다(없으면 500 `MODEL_NOT_CONFIGURED`). 프롬프트 버전은 `suggest-v1`이고 `app/llm/prompts/suggestion.py`의 고정 문구 지문을 테스트가 고정한다. 단가는 호출 A의 `OPENAI_PRICE_*`를 재사용한다.
+- 모델은 환경 값 `OPENAI_MODEL_SUGGEST`에서만 읽는다(없으면 500 `MODEL_NOT_CONFIGURED`). 프롬프트 버전은 `suggest-v2`(v1에서 한글 수량 표현 금지 문구를 더해 올림, 결정 2026-11-03, 사용자 승인)이고 `app/llm/prompts/suggestion.py`의 고정 문구 지문을 테스트가 고정한다. 단가는 호출 A의 `OPENAI_PRICE_*`를 재사용한다.
 - 입력은 스냅샷의 표(행마다 `row_id`, `group`, `source`, `item`, `metrics`, `small_sample`)와 제품군·회차 이름뿐이다. 근거 ID, 리뷰 본문, 작성자는 보내지 않는다. 문장은 한국어 한 문장 120자 이내, 한 호출에서 최대 5문장이다.
-- 문장별 검증(`app/llm/suggestion_validators.py`): (a) `row_ids`가 비었거나 표에 없는 값이 있거나 행들의 근거 합집합이 비면 `dropped_no_evidence`. (b) 길이 초과, 한 문장이 아님, 중복, 5문장 초과, 설문(합성) 행을 참조했는데 문장에 "합성"이 없음, 판정 묶음의 `small_sample` 행을 참조했는데 문장에 "표본"이 없음은 `dropped_other`. (c) 문장 속 아라비아 숫자가 참조한 행의 지표 값과 일치하지 않으면 `dropped_number_mismatch`.
+- 문장별 검증(`app/llm/suggestion_validators.py`): (a) `row_ids`가 비었거나 표에 없는 값이 있거나 행들의 근거 합집합이 비면 `dropped_no_evidence`. (b) 길이 초과, 한 문장이 아님, 중복, 5문장 초과, 설문(합성) 행을 참조했는데 문장에 "합성"이 없음, 판정 묶음의 `small_sample` 행을 참조했는데 문장에 "표본"이 없음은 `dropped_other`. (c) 문장 속 아라비아 숫자가 참조한 행의 지표 값과 일치하지 않거나 한글 수량 표현(절반, 반절, 과반, 곱절, 몇 배, 고유어 수·한자어 수 + 건/명/점/개/배/문항/가지/퍼센트)이 있으면 `dropped_number_mismatch`. 표현 목록은 사용자가 정했고(2026-11-03) 문항·선택지 라벨 속 글자는 뺀다. "대부분", "소수" 같은 질적 표현은 막지 않는다. 지시어 "이"(이 점) 같은 정상 문장이 제외될 수 있는 것이 알려진 한계다.
 - 숫자 일치 규칙: 문장의 숫자를 모두 뽑아 참조한 행의 지표 값과 비교한다. 쓴 소수 자리(0~2)로 반올림한 값이 같으면 통과한다(예: 비율 28.4는 28, 28.4, 28.40 통과, 29와 28.5는 실패). 문항·선택지 라벨, 회차·제품군 이름, 문항 코드(q09 등) 속 숫자는 비교에서 뺀다. 설문 선택지 행의 `선택지 번호`와 평점 행의 `평점`도 지표 값이라 "5점" 같은 표현이 통과한다.
 - 재시도: 일시 오류는 대기 1, 2, 4초로 최대 3회 다시 보낸다. 통과한 문장이 0개이거나 JSON·스키마가 깨지면 전체를 최대 2회 다시 요청한다(총 3번 요청). 통과한 문장이 하나도 없으면 실행은 `failed`(`error_code` `NO_SUGGESTIONS` 또는 `INVALID_OUTPUT`)이고 리포트를 만들지 않는다. 누적 비용이 한도를 넘으면 더 요청하지 않는다(`COST_LIMIT`).
 - 실행 기록 `counters`: `proposed`, `accepted`, `dropped_no_evidence`, `dropped_number_mismatch`, `dropped_other`(마지막으로 검증한 시도의 건수), `attempts`(전체 요청 횟수), `llm_calls`(일시 오류 재시도를 포함한 호출 수). `llm_call_log`의 `call_type`은 `B`다.
