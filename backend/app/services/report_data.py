@@ -9,8 +9,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import ActionSuggestion, AnalysisSnapshot, Hypothesis, NextSurveyQuestion, ProductFamily, Report, Round
+from app.services.action_cards import CARD_AREA, parse_card_sentence, rank_notice
 from app.services.evidence import evidence_counts
-from app.services.question_forms import OPPORTUNITY_HYPOTHESIS_KIND, OPPORTUNITY_STATEMENT, normalize_question
+from app.services.question_forms import KIND_OPPORTUNITY, OPPORTUNITY_HYPOTHESIS_KIND, OPPORTUNITY_STATEMENT, normalize_question
 from app.services.hypotheses import SMALL_SAMPLE_ROW_IDS
 
 
@@ -55,6 +56,45 @@ def counts_for_list(session: Session, report_ids: list[int]) -> dict[int, tuple[
     return result
 
 
+def check_question_no(session: Session, report_id: int) -> int | None:
+    """같은 리포트의 최신 문항 초안에서 영역 확인 문항(kind = opportunity_matrix)의 번호(order_no). 없으면 None."""
+    run_id = latest_draft_run_id(session, report_id)
+    if run_id is None:
+        return None
+    for question in session.scalars(
+        select(NextSurveyQuestion).where(NextSurveyQuestion.report_id == report_id, NextSurveyQuestion.run_id == run_id).order_by(NextSurveyQuestion.order_no)
+    ):
+        if normalize_question(question.type, question.options_json)["kind"] == KIND_OPPORTUNITY:
+            return question.order_no
+    return None
+
+
+def survey_respondents(snapshot: AnalysisSnapshot | None) -> int | None:
+    """스냅샷 표의 설문 응답 수(survey:respondents). 없으면 None."""
+    if snapshot is None:
+        return None
+    for row in snapshot.table_json.get("rows", []):
+        if row.get("row_id") == "survey:respondents":
+            return row.get("metrics", {}).get("응답자 수")
+    return None
+
+
+def card_fields(session: Session, report_id: int, suggestions: list, snapshots: dict) -> tuple[list[dict], str | None]:
+    """문장마다 카드 필드(parse_card_sentence + check_question_no)와 리포트 단위 안내(rank_notice). 액션플랜 API와 리포트 API가 같이 쓴다."""
+    check_no = check_question_no(session, report_id)
+    extras, area_labels, respondents = [], [], None
+    for suggestion in suggestions:
+        parsed = parse_card_sentence(suggestion.sentence)
+        is_area = parsed["card_kind"] == CARD_AREA
+        parsed["check_question_no"] = check_no if is_area else None
+        if is_area:
+            area_labels.append(parsed["rank_label"])
+            if respondents is None:
+                respondents = survey_respondents(snapshots.get(suggestion.snapshot_id))
+        extras.append(parsed)
+    return extras, rank_notice(area_labels, respondents, check_no)
+
+
 def build_report(session: Session, report_id: int) -> dict | None:
     """A-6 응답(과 내보내기 입력). 없으면 None."""
     report = session.get(Report, report_id)
@@ -70,7 +110,8 @@ def build_report(session: Session, report_id: int) -> dict | None:
         for s in session.scalars(select(AnalysisSnapshot).where(AnalysisSnapshot.snapshot_id.in_({x.snapshot_id for x in suggestions})))
     }
     plan = []
-    for suggestion in suggestions:
+    card_extras, notice = card_fields(session, report_id, suggestions, snapshots)
+    for suggestion, extra in zip(suggestions, card_extras):
         snapshot = snapshots[suggestion.snapshot_id]
         rows = {row["row_id"]: row for row in snapshot.table_json["rows"]}
         sources = sorted({rows[rid]["source"] for rid in suggestion.row_ids if rid in rows}, key=lambda s: (s != "합성", s))
@@ -82,6 +123,7 @@ def build_report(session: Session, report_id: int) -> dict | None:
                 "evidence_count": evidence_counts(snapshot, suggestion.row_ids),
                 "has_synthetic": "합성" in sources,
                 "sources": sources,
+                **extra,
             }
         )
     run_id = latest_draft_run_id(session, report_id)
@@ -133,5 +175,6 @@ def build_report(session: Session, report_id: int) -> dict | None:
         "family": None if family is None else {"family_id": family.family_id, "name": family.name},
         "generated_at": report.generated_at.isoformat(),
         "action_plan": plan,
+        "rank_notice": notice,
         "next_survey": {"status": "draft", "run_id": run_id, "questions": questions, "no_question_hypotheses": no_question},
     }

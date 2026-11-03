@@ -48,10 +48,17 @@ class EvidenceCountOut(BaseModel):
 class ActionPlanItem(BaseModel):
     suggestion_id: int
     order_no: int
-    sentence: str
+    sentence: str  # 저장된 문장 전체(이전 형식 호환). 카드는 아래 필드로 쪼개서 준다
     evidence_count: EvidenceCountOut
     has_synthetic: bool
     sources: list[str]
+    card_kind: str  # area | voc | legacy
+    area_label: str | None
+    rank_label: str | None
+    priority_text: str
+    deliverable_kind: str | None
+    deliverable_text: str | None
+    check_question_no: int | None
 
 
 class OptionOut(BaseModel):
@@ -94,6 +101,7 @@ class ReportOut(BaseModel):
     family: FamilyOut | None
     generated_at: str
     action_plan: list[ActionPlanItem]
+    rank_notice: str | None
     next_survey: NextSurvey
 
 

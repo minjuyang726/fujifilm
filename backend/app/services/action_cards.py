@@ -14,6 +14,7 @@
 """
 
 import math
+import re
 from dataclasses import dataclass, field
 
 AREA_QUESTION_CODE = "q08"
@@ -150,3 +151,64 @@ def review_card(rows_by_id: dict) -> tuple[str, list[str]] | None:
     if judged.get("small_sample"):
         sentence += " 판정 표본이 적어 영역 우선순위는 설문 기준으로만 정했다."
     return sentence, list(REVIEW_ROW_IDS)
+
+
+# ---------- 저장된 카드 문장 쪼개기와 리포트 안내 문구 (API·화면·내보내기가 함께 쓴다) ----------
+CARD_PATTERN = re.compile(
+    "^" + re.escape(SYNTHETIC_PREFIX) + r" '(?P<label>.+?)' 영역 — (?P<priority>.+?)" + re.escape(CARD_SEPARATOR)
+    + re.escape(DELIVERABLE_LABEL) + r"\((?P<kind>[^()]+)\): (?P<text>.*)$",
+    re.S,
+)
+RANK_PATTERN = re.compile(r"(공동 )?([0-9]+)순위")
+CARD_AREA, CARD_VOC, CARD_LEGACY = "area", "voc", "legacy"
+ALL_JOINT_FIRST = "공동 1순위"
+
+
+def parse_card_sentence(sentence) -> dict:
+    """저장된 action_suggestion.sentence를 카드 필드로 쪼갠다. 예외를 내지 않는다.
+
+    - 영역 카드 "합성 설문 기준 '라벨' 영역 — 우선순위 문장 ▸ 산출물(종류): 본문" -> card_kind "area"
+    - 쿠팡 리뷰 카드 "쿠팡 리뷰 기준(실측) — ..." -> "voc"
+    - 그 밖(suggest-v3 일반 문장, 깨진 형식) -> "legacy". voc와 legacy는 문장 전체를 priority_text에 둔다.
+    rank_label은 우선순위 문장에 들어 있는 순위 라벨("공동 1순위" 등)이고 없으면 None이다."""
+    text = sentence if isinstance(sentence, str) else ("" if sentence is None else str(sentence))
+    result = {
+        "card_kind": CARD_LEGACY, "area_label": None, "rank_label": None, "priority_text": text,
+        "deliverable_kind": None, "deliverable_text": None,
+    }
+    try:
+        if text.startswith(f"{REVIEW_PREFIX} — "):
+            result["card_kind"] = CARD_VOC
+            return result
+        match = CARD_PATTERN.match(text.strip())
+        if match is None:
+            return result
+        priority = match.group("priority").strip()
+        rank = RANK_PATTERN.search(priority)
+        result.update(
+            card_kind=CARD_AREA, area_label=match.group("label"), priority_text=priority,
+            rank_label=None if rank is None else f"{'공동 ' if rank.group(1) else ''}{rank.group(2)}순위",
+            deliverable_kind=match.group("kind").strip(), deliverable_text=match.group("text").strip(),
+        )
+    except Exception:  # 어떤 형식이어도 화면이 깨지지 않게 이전 형식으로 돌린다
+        return {
+            "card_kind": CARD_LEGACY, "area_label": None, "rank_label": None, "priority_text": text,
+            "deliverable_kind": None, "deliverable_text": None,
+        }
+    return result
+
+
+def rank_notice(rank_labels: list[str | None], respondents: int | None, check_question_no: int | None) -> str | None:
+    """리포트 단위 안내. 영역 카드의 순위 라벨이 모두 "공동 1순위"이면 순위를 가리지 못했다는 안내(확인 문항 번호가 있으면 함께),
+    일부만 공동이면 짧은 안내, 영역 카드가 없거나 공동이 없으면 None."""
+    if not rank_labels:
+        return None
+    if all(label == ALL_JOINT_FIRST for label in rank_labels):
+        count = "" if respondents is None else f"(응답 {respondents}건)"
+        text = f"합성 설문{count}에서는 상위 영역의 선택 비율 차이가 우연 범위라 순위를 가리지 못했습니다."
+        if check_question_no is not None:
+            text += f" 다음 회차 문항 {check_question_no}번(영역별 눈금)으로 순위를 가립니다."
+        return text
+    if any(label and label.startswith("공동") for label in rank_labels):
+        return "일부 영역은 차이가 우연 범위라 공동 순위로 표시했습니다."
+    return None

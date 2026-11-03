@@ -267,7 +267,9 @@ def test_unknown_review_id_is_rejected_as_a_whole(seeded, session_factory):
     response = api.post("/api/rounds/1/pipeline/ad-judgement", json={"review_ids": [1, 2, 999]})
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "UNKNOWN_REVIEW_IDS"
-    assert "999" not in response.text
+    # 응답 전체가 아니라 오류 내용(request_id는 무작위 16진 문자열이라 "999"가 우연히 들어갈 수 있다)에서 입력한 ID가 반영되지 않았는지 본다
+    error = response.json()["error"]
+    assert "999" not in str({key: value for key, value in error.items() if key != "request_id"})
     assert client.calls == []
     seeded.expire_all()
     assert count(seeded, PipelineRun) == 0

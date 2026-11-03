@@ -233,3 +233,60 @@ def test_an_option_without_a_mapping_gets_no_q07_row(monkeypatch):
     monkeypatch.setattr(cards, "Q08_TO_Q07_OPTION", {"2": "2"})
     areas = cards.select_areas(table, evidence, LABELS)
     assert areas[0].row_ids == ["survey:q08:1"] and areas[1].row_ids == ["survey:q08:2", "survey:q07:2"]
+
+
+# ---------- 저장된 카드 문장 쪼개기 ----------
+def test_parse_an_area_card_sentence():
+    sentence = cards.render_area_card(sample_area(joint=True), "이 영역은 {pct}이며 {rank}입니다.", "FAQ 초안", "문의 답변 초안입니다. 기간은 [확인 필요]입니다.")
+    assert cards.parse_card_sentence(sentence) == {
+        "card_kind": "area", "area_label": "결과물 품질", "rank_label": "공동 2순위", "priority_text": "이 영역은 26.0%이며 공동 2순위입니다.",
+        "deliverable_kind": "FAQ 초안", "deliverable_text": "문의 답변 초안입니다. 기간은 [확인 필요]입니다.",
+    }
+
+
+def test_parse_keeps_label_text_with_punctuation_and_a_plain_rank():
+    parsed = cards.parse_card_sentence(cards.render_area_card(sample_area(label="필름·소모품 비용"), "이 영역은 {pct}이며 {rank}입니다.", "내부 보고 문단", "보고 문단입니다."))
+    assert (parsed["area_label"], parsed["rank_label"], parsed["deliverable_kind"]) == ("필름·소모품 비용", "2순위", "내부 보고 문단")
+
+
+def test_parse_the_review_card_and_legacy_sentences():
+    table, _ = make_table({"1": 10}, judged=4, small=True)
+    review_sentence, _row_ids = cards.review_card({r["row_id"]: r for r in table["rows"]})
+    voc = cards.parse_card_sentence(review_sentence)
+    assert voc["card_kind"] == "voc" and voc["priority_text"] == review_sentence and voc["area_label"] is None and voc["deliverable_text"] is None
+    legacy = cards.parse_card_sentence("합성 설문에서 지인에게 추천한 적이 있다는 응답이 49건이라 추천 경로를 넓히는 안을 검토한다.")
+    assert legacy["card_kind"] == "legacy" and legacy["priority_text"].startswith("합성 설문에서") and legacy["rank_label"] is None
+
+
+@pytest.mark.parametrize("broken", [
+    "합성 설문 기준 '라벨' 영역 — 산출물 구분자가 없다",
+    "합성 설문 기준 영역 — 라벨 따옴표가 없다 ▸ 산출물(FAQ 초안): 본문",
+    "합성 설문 기준 '라벨' 영역 — 문장 ▸ 산출물 FAQ 초안: 괄호가 없다",
+    "", "   ",
+])
+def test_parse_treats_broken_formats_as_legacy_without_raising(broken):
+    parsed = cards.parse_card_sentence(broken)
+    assert parsed["card_kind"] == "legacy" and parsed["priority_text"] == broken
+
+
+def test_parse_does_not_raise_for_non_strings():
+    assert cards.parse_card_sentence(None)["card_kind"] == "legacy"
+    assert cards.parse_card_sentence(123)["priority_text"] == "123"
+
+
+def test_parse_area_card_without_a_rank_in_the_text_has_no_rank_label():
+    parsed = cards.parse_card_sentence("합성 설문 기준 '라벨' 영역 — 순위 표기가 없는 문장입니다. ▸ 산출물(FAQ 초안): 본문")
+    assert parsed["card_kind"] == "area" and parsed["rank_label"] is None
+
+
+# ---------- 리포트 안내 문구 ----------
+def test_rank_notice_texts():
+    all_joint = ["공동 1순위"] * 3
+    assert cards.rank_notice(all_joint, 100, 1) == (
+        "합성 설문(응답 100건)에서는 상위 영역의 선택 비율 차이가 우연 범위라 순위를 가리지 못했습니다. 다음 회차 문항 1번(영역별 눈금)으로 순위를 가립니다.")
+    assert cards.rank_notice(all_joint, 100, None) == "합성 설문(응답 100건)에서는 상위 영역의 선택 비율 차이가 우연 범위라 순위를 가리지 못했습니다."
+    assert cards.rank_notice(["공동 1순위", "공동 1순위", "3순위"], 100, 1) == "일부 영역은 차이가 우연 범위라 공동 순위로 표시했습니다."
+    assert cards.rank_notice(["1순위", "공동 2순위", "공동 2순위"], 100, 1) == "일부 영역은 차이가 우연 범위라 공동 순위로 표시했습니다."
+    assert cards.rank_notice(["1순위", "2순위", "3순위"], 100, 1) is None
+    assert cards.rank_notice([], 100, 1) is None  # 영역 카드가 없다
+    assert cards.rank_notice([None, None], 100, 1) is None  # 순위 라벨을 못 읽으면 안내하지 않는다

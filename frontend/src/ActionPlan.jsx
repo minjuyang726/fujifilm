@@ -123,34 +123,65 @@ function EvidenceList({ suggestionId, kind, onClose }) {
   )
 }
 
-export function PlanSentence({ item, open, onOpen }) {
+// 근거 건수 버튼(리뷰, 설문). 카드와 이전 형식 문장이 같이 쓴다.
+function EvidenceButtons({ item, open, onOpen }) {
   const { review, survey } = item.evidence_count
+  return (
+    <div className="plan-evidence">
+      <span className="source-line">근거</span>
+      <button
+        type="button"
+        className={open?.kind === 'review' ? 'tab active' : 'tab'}
+        disabled={review === 0}
+        onClick={() => onOpen({ suggestionId: item.suggestion_id, kind: 'review' })}
+      >
+        {`리뷰 ${formatCount(review)}건`}
+      </button>
+      <button
+        type="button"
+        className={open?.kind === 'survey' ? 'tab active' : 'tab'}
+        disabled={survey === 0}
+        onClick={() => onOpen({ suggestionId: item.suggestion_id, kind: 'survey' })}
+      >
+        {`설문 ${formatCount(survey)}건 (합성)`}
+      </button>
+    </div>
+  )
+}
+
+// 영역 카드(card_kind = 'area', suggest-v4)는 제목줄·우선순위 문장·"AI가 작성한 초안" 상자·확인 문항으로 보인다.
+// 쿠팡 리뷰 카드('voc')와 이전 형식 문장('legacy', 또는 card_kind가 없는 응답)은 기존 모양 그대로다.
+export function PlanSentence({ item, open, onOpen }) {
+  const panel = open && <EvidenceList key={`${open.suggestionId}-${open.kind}`} {...open} onClose={() => onOpen(null)} />
+  if (item.card_kind === 'area') {
+    return (
+      <li className="plan-item plan-card">
+        <div className="card-head">
+          <span className="plan-no">{item.order_no}.</span>
+          <strong className="card-title">{`${item.area_label} 영역`}</strong>
+          {item.rank_label && <span className="badge badge-rank">{item.rank_label}</span>}
+          {item.has_synthetic && <SyntheticBadge />}
+        </div>
+        <p className="plan-sentence">{item.priority_text}</p>
+        <div className="draft-box">
+          <p className="draft-title">{`AI가 작성한 초안 · ${item.deliverable_kind}`}</p>
+          <p className="draft-note">검토·수정이 필요한 초안입니다</p>
+          <p className="draft-text">{item.deliverable_text}</p>
+        </div>
+        <EvidenceButtons item={item} open={open} onOpen={onOpen} />
+        {item.check_question_no != null && <p className="source-line check-line">{`확인 문항: 다음 회차 문항 ${item.check_question_no}번`}</p>}
+        {panel}
+      </li>
+    )
+  }
   return (
     <li className="plan-item">
       <p className="plan-sentence">
         <span className="plan-no">{item.order_no}.</span> {item.sentence}
         {item.has_synthetic && <SyntheticBadge />}
       </p>
-      <div className="plan-evidence">
-        <span className="source-line">근거</span>
-        <button
-          type="button"
-          className={open?.kind === 'review' ? 'tab active' : 'tab'}
-          disabled={review === 0}
-          onClick={() => onOpen({ suggestionId: item.suggestion_id, kind: 'review' })}
-        >
-          {`리뷰 ${formatCount(review)}건`}
-        </button>
-        <button
-          type="button"
-          className={open?.kind === 'survey' ? 'tab active' : 'tab'}
-          disabled={survey === 0}
-          onClick={() => onOpen({ suggestionId: item.suggestion_id, kind: 'survey' })}
-        >
-          {`설문 ${formatCount(survey)}건 (합성)`}
-        </button>
-      </div>
-      {open && <EvidenceList key={`${open.suggestionId}-${open.kind}`} {...open} onClose={() => onOpen(null)} />}
+      <EvidenceButtons item={item} open={open} onOpen={onOpen} />
+      {panel}
     </li>
   )
 }
@@ -241,6 +272,7 @@ function ActionPlan() {
           <p className="source-line">
             {`가장 최근 성공한 실행(#${plan.data.report.run_id}) 기준 · 문장 ${plan.data.action_plan.length}개 · 문장은 AI가 코드가 계산한 표를 보고 서술한 것이며 근거는 코드가 붙였습니다`}
           </p>
+          {plan.data.rank_notice && <p className="note rank-notice">{plan.data.rank_notice}</p>}
           <ol className="plan-list">
             {plan.data.action_plan.map((item) => (
               <PlanSentence
