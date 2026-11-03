@@ -110,7 +110,7 @@ def run_step(
         if settings.price_input_per_m is None or settings.price_output_per_m is None:
             raise _error(500, "PRICE_NOT_CONFIGURED", "비용 가드에 필요한 단가가 설정되지 않아 호출하지 않았습니다.")
         prices = Prices(settings.price_input_per_m, settings.price_output_per_m)
-        system_prompt, user_prompt = build_prompts(snapshot)
+        system_prompt, user_prompt = build_prompts(session, snapshot)
         estimate = estimate_suggestion_cost(len(system_prompt), len(user_prompt), prices)
         limit = settings.suggestion_cost_limit_usd
         if estimate.upper_usd > limit:

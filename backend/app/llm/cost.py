@@ -156,20 +156,20 @@ def suggest_calibration(samples: list[CallSample], current: Calibration = CALIBR
 
 @dataclass(frozen=True)
 class SuggestionCalibration:
-    """호출 B(액션 제안 서술)의 비용 추정 계수. 호출 B는 아직 실제로 불러 본 적이 없어서 모두 가정이다(실측 아님).
+    """호출 B(액션 카드 서술, suggest-v4)의 비용 추정 계수. suggest-v4는 아직 실제로 불러 본 적이 없어서 모두 가정이다(실측 아님).
 
-    - 입력: 시스템 프롬프트와 사용자 프롬프트의 글자 수 × 글자당 토큰. 0.80은 호출 A에서 한국어 리뷰로 잰 값의 상한이고,
-      JSON 기호와 숫자가 많은 표에도 맞는지는 확인되지 않았다.
-    - 출력: 문장 최대 5개 × (120자 × 글자당 토큰 + 문장당 구조 토큰) + 고정 토큰.
+    - 입력: 시스템 프롬프트와 사용자 프롬프트(영역 3개)의 글자 수 × 글자당 토큰. 0.80은 호출 A에서 한국어 리뷰로 잰 값의 상한이다.
+    - 출력: 카드 3개 × (우선순위 문장 120자 + 산출물 200자 = 320자 × 글자당 토큰 + 카드당 구조 토큰) + 고정 토큰.
+      (suggest-v3의 가정 "문장 5개 × (120자 + 40토큰) + 20 = 820"은 실제 909토큰으로 한 번 부족했다.)
     - 재시도 배수: 같은 요청이 청구될 수 있는 최대 횟수 = 1 + 전체 재요청 2회.
     """
 
     tokens_per_char: float = 0.80
     output_tokens_per_char: float = 1.0
-    output_overhead_per_sentence: int = 40
+    output_overhead_per_sentence: int = 60  # 카드당(필드 이름, 산출물 종류 포함) 구조 토큰
     output_fixed_tokens: int = 20
-    max_sentences: int = 5
-    max_sentence_chars: int = 120
+    max_sentences: int = 3  # 카드 수(개선 영역 상위 3개)
+    max_sentence_chars: int = 320  # 카드당 글자 수 = 우선순위 문장 120 + 산출물 200
     retry_multiplier: int = 3
 
 

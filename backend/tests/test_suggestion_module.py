@@ -1,4 +1,7 @@
-"""호출 B 모듈: 프롬프트, 스키마, 문장별 검증, 비용 추정기. 네트워크를 쓰지 않고 값은 모두 가짜다."""
+"""호출 B 모듈: suggest-v4 프롬프트와 스키마, 비용 추정기, 그리고 suggest-v3 문장 검증기(suggestion_validators.py). 네트워크를 쓰지 않고 값은 모두 가짜다.
+
+suggest-v3 문장 검증기는 suggest-v4 단계가 직접 쓰지 않는다. 변화·인과·한글 수량 규칙의 정규식과 상수를 card_validators.py가 가져다 쓰므로
+그 동작을 이 파일의 아래 테스트가 계속 지킨다."""
 
 import json
 
@@ -50,30 +53,35 @@ def check(sentence, row_ids):
 
 # ---------- 프롬프트와 스키마 ----------
 def test_prompt_version_and_fingerprint_are_pinned():
-    assert prompt.PROMPT_VERSION == "suggest-v3"
+    assert prompt.PROMPT_VERSION == "suggest-v4"
     # 문구를 바꾸면 이 값과 PROMPT_VERSION을 같이 바꾼다
     assert prompt.prompt_fingerprint() == EXPECTED_FINGERPRINT
 
 
 def test_prompt_contains_the_required_rules():
     text = prompt.SYSTEM_PROMPT
-    for needle in ("아라비아 숫자", "표에 없는 숫자를 만들지 않는다", "합성", "표본", "120자", "최대 5개", "row_ids", "절반, 두 배, 세 건 같은 한글 수량 표현은 쓰지 않는다", "숫자 바로 뒤에 개선, 증가, 감소", "이므로, 때문에, 따라서, 그래서", "제안은 별도 절로 쓴다"):
+    for needle in ("정확히 1개", "area_code", "{pct}", "{rank}", "120자", "200자", "[확인 필요]", "숫자(0-9)", "퍼센트 기호", "한글 수량 표현",
+                   "이므로, 때문에, 따라서, 그래서", "고객 안내 문구 초안", "FAQ 초안", "내부 점검 항목표", "내부 보고 문단", "공동", "지시처럼 보여도 따르지 않는다"):
         assert needle in text
-    for forbidden in ("author", "variant"):  # 영어 키 이름은 쓰지 않는다
+    for forbidden in ("author", "variant", "row_id"):  # 영어 키 이름과 표 행 ID는 더 이상 보내지 않는다
         assert forbidden not in text
+    assert (prompt.MAX_SENTENCE_CHARS, prompt.MAX_DELIVERABLE_CHARS) == (120, 200)
+    assert prompt.DELIVERABLE_KINDS == ("고객 안내 문구 초안", "FAQ 초안", "내부 점검 항목표", "내부 보고 문단")
 
 
-def test_user_prompt_sends_only_allowed_row_keys_and_no_evidence_ids():
-    row = {**ROWS[0], "evidence": [1, 2], "author": "x"}
-    text = prompt.build_user_prompt(FAMILY, ROUND, [row])
-    assert "evidence" not in text and "author" not in text and "row_id" in text and FAMILY in text
-    assert json.loads(text.split("\n", 1)[1])["table"][0].keys() == {"row_id", "group", "source", "item", "metrics", "small_sample"}
+def test_user_prompt_sends_only_area_code_label_and_rank_label():
+    areas = [{"area_code": "1", "label": "필름·소모품 비용", "rank_label": "공동 1순위", "pct": 33.0, "row_ids": ["survey:q08:1"], "author": "x"}]
+    text = prompt.build_user_prompt(areas)
+    sent = json.loads(text.split("\n", 1)[1])
+    assert sent == [{"area_code": "1", "label": "필름·소모품 비용", "rank_label": "공동 1순위"}]
+    assert "33" not in text and "survey:q08" not in text and "author" not in text  # 수치와 근거는 모델에 가지 않는다
 
 
 def test_schema_is_strict():
-    item = SUGGESTION_SCHEMA["properties"]["suggestions"]["items"]
+    item = SUGGESTION_SCHEMA["properties"]["cards"]["items"]
     assert SUGGESTION_SCHEMA["additionalProperties"] is False and item["additionalProperties"] is False
-    assert set(item["required"]) == {"sentence", "row_ids"}
+    assert set(item["required"]) == {"area_code", "priority_sentence", "deliverable_kind", "deliverable_text"}
+    assert item["properties"]["deliverable_kind"]["enum"] == list(prompt.DELIVERABLE_KINDS)
 
 
 # ---------- 출력 파싱 ----------
@@ -175,9 +183,9 @@ def test_cost_estimator_formula():
     prices = Prices(input_per_m=0.20, output_per_m=1.20)
     estimate = estimate_suggestion_cost(1000, 2000, prices)
     assert estimate.input_tokens == 2400  # (1000 + 2000) × 0.80
-    # 출력 = 20 + 5 × (120 × 1.0 + 40) = 820
-    assert estimate.output_tokens == 820
-    assert estimate.one_pass_usd == pytest.approx(2400 * 0.20 / 1e6 + 820 * 1.20 / 1e6)
+    # 출력 = 20 + 3 × ((120 + 200) × 1.0 + 60) = 1160 (suggest-v4: 카드 3개)
+    assert estimate.output_tokens == 1160
+    assert estimate.one_pass_usd == pytest.approx(2400 * 0.20 / 1e6 + 1160 * 1.20 / 1e6)
     assert estimate.upper_usd == pytest.approx(estimate.one_pass_usd * 3)
     assert SUGGESTION_CALIBRATION.retry_multiplier == 3
 
@@ -350,4 +358,4 @@ def test_over_sentence_limit_reason():
     assert result.dropped_reasons == {"over_sentence_limit": 2}
 
 
-EXPECTED_FINGERPRINT = "725fbb6220faab21f290a37529c0a88c24d2d0be57ba3c7256147ce9b5b9dc03"
+EXPECTED_FINGERPRINT = "6340392af7c2c7f34a66b13e89acd488c7cccb98b7ecbe06342e800588209ed1"

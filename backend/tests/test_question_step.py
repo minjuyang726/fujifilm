@@ -15,7 +15,7 @@ from app.services import question_step
 from app.services.question_step import run_next_survey_draft, snapshot_for_report
 from app.services.report_data import latest_report
 from tests.fakes import ScriptedClient
-from tests.test_suggestion_step import good_sentences, llm_text, set_llm, snapshot_via_api, world  # noqa: F401
+from tests.test_suggestion_step import good_response, llm_text, set_llm, snapshot_via_api, world  # noqa: F401
 
 
 class QuestionClient:
@@ -57,7 +57,7 @@ def use_client(client, model="fake-question-model"):
 def make_report(world):
     """스냅샷 -> action-suggestions(가짜) 까지 만들어 report를 준비한다."""
     snapshot = snapshot_via_api(world)
-    set_llm([llm_text(*good_sentences(snapshot))])
+    set_llm([good_response(world, snapshot)])
     response = world.post(f"/api/rounds/{world.q1.round_id}/pipeline/action-suggestions", json={"family_id": 1})
     assert response.status_code == 201 and response.json()["status"] == "succeeded"
     return latest_report(world.session, 1, world.q1.round_id)
@@ -302,7 +302,7 @@ def test_report_assembly_checks_both_parts_and_only_records_a_run(world):
     response = world.post(url, json={"family_id": 1})
     assert response.status_code == 201 and response.json()["step"] == "report-assembly" and response.json()["status"] == "succeeded"
     run = world.session.get(PipelineRun, response.json()["run_id"])
-    assert run.counters["suggestions"] == 2 and run.counters["questions"] >= 1 and run.counters["report_id"]
+    assert run.counters["suggestions"] == 4 and run.counters["questions"] >= 1 and run.counters["report_id"]
     after = (len(world.session.scalars(select(Report)).all()), len(world.session.scalars(select(NextSurveyQuestion)).all()))
     assert before == after  # 새 데이터를 만들지 않는다
 

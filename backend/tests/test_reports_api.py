@@ -1,5 +1,6 @@
 """A-5, A-6, A-7(HTML 내보내기). 임시 SQLite만 쓰고 모든 값은 가짜다."""
 
+import html
 import json
 import re
 
@@ -29,7 +30,7 @@ def test_report_list_filters_and_counts(world):
     assert [r["report_id"] for r in listing] == [report.report_id]
     item = listing[0]
     assert set(item) == {"report_id", "round_id", "family_id", "generated_at", "suggestion_count", "question_count"}
-    assert item["suggestion_count"] == 2 and item["question_count"] >= 1 and item["family_id"] == 1
+    assert item["suggestion_count"] == 4 and item["question_count"] >= 1 and item["family_id"] == 1
     assert world.get(f"/api/reports?round_id={world.q1.round_id}&family_id=1").json()["reports"] == listing
     assert world.get("/api/reports?family_id=2").json()["reports"] == []
     assert world.get("/api/reports?round_id=abc").status_code == 422
@@ -51,10 +52,10 @@ def test_report_has_action_plan_and_next_survey_together(world):
     assert set(body) == {"report_id", "round", "family", "generated_at", "action_plan", "next_survey"}
     assert body["round"]["label"] == "2026-Q1" and body["family"] == {"family_id": 1, "name": "일회용 카메라"}
     plan = body["action_plan"]
-    assert [p["order_no"] for p in plan] == [1, 2]
+    assert [p["order_no"] for p in plan] == [1, 2, 3, 4]
     assert set(plan[0]) == {"suggestion_id", "order_no", "sentence", "evidence_count", "has_synthetic", "sources"}
-    assert plan[0]["has_synthetic"] is True and plan[0]["sources"] == ["합성"] and plan[1]["sources"] == ["실측"]
-    assert plan[0]["evidence_count"]["survey"] > 0 and plan[1]["evidence_count"]["review"] > 0
+    assert plan[0]["has_synthetic"] is True and plan[0]["sources"] == ["합성"] and plan[3]["sources"] == ["실측"]  # 영역 카드 3개(설문) + 쿠팡 리뷰 카드
+    assert plan[0]["evidence_count"]["survey"] > 0 and plan[3]["evidence_count"]["review"] > 0
     survey = body["next_survey"]
     assert survey["status"] == "draft" and survey["run_id"] and survey["questions"]
     question = survey["questions"][0]
@@ -81,7 +82,7 @@ def test_report_shows_only_the_latest_draft_run(world):
 def test_report_without_a_draft_has_an_empty_question_list(world):
     report = make_report(world)
     body = world.get(f"/api/reports/{report.report_id}").json()
-    assert body["next_survey"] == {"status": "draft", "run_id": None, "questions": [], "no_question_hypotheses": []} and len(body["action_plan"]) == 2
+    assert body["next_survey"] == {"status": "draft", "run_id": None, "questions": [], "no_question_hypotheses": []} and len(body["action_plan"]) == 4
 
 
 def test_report_errors(world):
@@ -100,7 +101,7 @@ def test_export_returns_a_standalone_html_attachment(world):
     assert document.startswith("<!doctype html>") and "<style>" in document
     body = world.get(f"/api/reports/{report.report_id}").json()
     for item in body["action_plan"]:
-        assert item["sentence"] in document  # 한글이라 이스케이프되지 않는다
+        assert html.escape(item["sentence"]) in document  # 카드 문장의 작은따옴표는 이스케이프된다
     assert "합성" in document and "실측" in document and "초안" in document
     assert "회차 공통 합성 응답(회차당 100건)" in document
     assert "표본 적음 — 데이터 보강 필요(문항 없음)" in document and "문항이 없는 가설" in document

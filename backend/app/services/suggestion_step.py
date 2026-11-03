@@ -1,9 +1,12 @@
-"""step action-suggestions: 스냅샷의 표로 액션 제안 문장을 서술하고(호출 B), 문장별로 검증해 저장한다.
+"""step action-suggestions(suggest-v4 액션 카드): 코드가 정한 개선 영역 3개에 대해 모델이 카드 문장과 산출물만 쓰고, 코드가 검증해 저장한다.
 
-- LLM은 코드가 계산한 표만 받고 문장과 row_ids만 낸다. 근거 ID는 코드가 스냅샷의 허용 목록에서 붙인다(SP-3).
-- 문장별로 검증해 통과한 문장만 쓴다(suggestion_validators). 통과한 문장이 0개이거나 스키마가 깨지면 전체를 다시 요청한다(최대 2회).
+- 영역 선정, 순위, 순위 라벨, 값은 모두 코드가 계산한다(app/services/action_cards.py). 모델 입력에는 area_code, 라벨, 순위 라벨만 있다.
+- 모델은 자리표시자({pct}, {rank})가 든 우선순위 문장과 산출물만 쓴다. 코드가 값을 채워 문장 하나로 저장한다.
+  저장 형식(기존 action_suggestion 컬럼 그대로): sentence = "합성 설문 기준 '라벨' 영역 — 우선순위 문장 ▸ 산출물(종류): 본문",
+  row_ids = q08 해당 보기 행과 q07의 같은 영역 보기 행. 쿠팡 리뷰 카드(코드 템플릿)는 마지막 순번으로 저장한다.
+- 카드별로 검증하고(card_validators) 입력의 모든 영역에 통과한 카드가 하나씩 있어야 받아들인다. 아니면 전체를 다시 요청한다(최대 2회).
 - 일시 오류(시간 초과, 429, 5xx)는 대기 시간을 늘려 가며 최대 3회 다시 보낸다(1, 2, 4초, 가정).
-- 통과한 문장이 하나도 없으면 실행은 failed다. 있으면 report 행 하나와 action_suggestion 행을 저장한다(실행마다 쌓는다, SQ-8).
+- 받아들일 응답이 없으면 실행은 failed다. 있으면 report 행 하나와 action_suggestion 행을 저장한다(실행마다 쌓는다, SQ-8).
 - 리뷰 본문, 키, LLM 요청·응답 원문은 로그, 실행 기록, llm_call_log 어디에도 남기지 않는다.
 """
 
@@ -18,10 +21,13 @@ from sqlalchemy.orm import Session
 from app.core.logging import log_event
 from app.llm.client import LLMClient, PermanentLLMError, TransientLLMError
 from app.llm.cost import CostGuard
+from app.llm.card_validators import CardFilterResult, filter_cards, parse_cards
 from app.llm.output_schemas.suggestion import SCHEMA_NAME, SUGGESTION_SCHEMA
 from app.llm.prompts.suggestion import PROMPT_VERSION, SYSTEM_PROMPT, build_user_prompt
-from app.llm.suggestion_validators import FilterResult, filter_suggestions, parse_suggestions
-from app.models import ActionSuggestion, AnalysisSnapshot, LlmCallLog, PipelineRun, ProductFamily, Report, Round
+from app.models import (
+    ActionSuggestion, AnalysisSnapshot, LlmCallLog, PipelineRun, ProductFamily, Report, Round, SurveyQuestion,
+)
+from app.services.action_cards import AREA_QUESTION_CODE, Area, render_area_card, review_card, select_areas
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +56,24 @@ def latest_snapshot(session: Session, family_id: int, round_id: int) -> Analysis
     ).first()
 
 
-def build_prompts(snapshot: AnalysisSnapshot) -> tuple[str, str]:
-    table = snapshot.table_json
-    return SYSTEM_PROMPT, build_user_prompt(table["family"], table["round"], table["rows"])
+def option_labels(session: Session, round_id: int) -> dict[str, str]:
+    """q08 보기 코드 -> 라벨. survey_question.options_json에서 읽는다."""
+    options = session.scalar(
+        select(SurveyQuestion.options_json).where(SurveyQuestion.round_id == round_id, SurveyQuestion.code == AREA_QUESTION_CODE)
+    )
+    return {option["code"]: option["label"] for option in (options or [])}
+
+
+def areas_for(session: Session, snapshot: AnalysisSnapshot) -> list[Area]:
+    return select_areas(snapshot.table_json, snapshot.allowed_evidence_json, option_labels(session, snapshot.round_id))
+
+
+def prompts_for_areas(areas: list[Area]) -> tuple[str, str]:
+    return SYSTEM_PROMPT, build_user_prompt([{"area_code": a.code, "label": a.label, "rank_label": a.rank_label} for a in areas])
+
+
+def build_prompts(session: Session, snapshot: AnalysisSnapshot) -> tuple[str, str]:
+    return prompts_for_areas(areas_for(session, snapshot))
 
 
 def run_action_suggestions(
@@ -84,8 +105,8 @@ def run_action_suggestions(
     try:
         table = snapshot.table_json
         rows_by_id = {row["row_id"]: row for row in table["rows"]}
-        allowed = snapshot.allowed_evidence_json
-        system_prompt, user_prompt = build_prompts(snapshot)
+        areas = areas_for(session, snapshot)
+        system_prompt, user_prompt = prompts_for_areas(areas)
 
         counters = {
             "proposed": 0,
@@ -94,15 +115,20 @@ def run_action_suggestions(
             "dropped_number_mismatch": 0,
             "dropped_other": 0,
             "dropped_reasons": {},  # dropped_other의 사유 코드별 건수(문장 본문은 저장하지 않는다)
+            "areas": len(areas),
             "attempts": 0,
             "llm_calls": 0,
         }
-        final: FilterResult | None = None
+        final: CardFilterResult | None = None
         error_code: str | None = None
         stop = False
         call_no = 0
 
-        for attempt in range(1 + MAX_VALIDATION_RETRIES):
+        if not areas:  # 개선 영역 후보가 없으면 모델을 부르지 않는다
+            error_code = ERROR_NO_SUGGESTIONS
+            stop = True
+
+        for attempt in range(0 if stop else 1 + MAX_VALIDATION_RETRIES):
             counters["attempts"] = attempt + 1
             # ---- 호출 한 번(일시 오류는 대기 후 다시 보낸다) ----
             result = None
@@ -132,7 +158,7 @@ def run_action_suggestions(
                 session.add(
                     LlmCallLog(
                         run_id=run_id, call_type=CALL_TYPE, model_name=model_name, prompt_version=PROMPT_VERSION,
-                        attempt_no=call_no, status="api_error", item_count=len(rows_by_id), latency_ms=latency_ms,
+                        attempt_no=call_no, status="api_error", item_count=len(areas), latency_ms=latency_ms,
                         error_code=problem, input_tokens=None, output_tokens=None, created_at=now(),
                     )
                 )
@@ -150,14 +176,14 @@ def run_action_suggestions(
                 cost_guard.record(result.input_tokens, result.output_tokens)
 
             # ---- 검증 ----
-            parsed = parse_suggestions(result.text)
-            filtered = FilterResult()
+            parsed = parse_cards(result.text)
+            filtered = CardFilterResult()
             if parsed.problem is None:
-                filtered = filter_suggestions(parsed.items, rows_by_id, allowed, table["family"], table["round"])
+                filtered = filter_cards(parsed.items, areas)
             session.add(
                 LlmCallLog(
                     run_id=run_id, call_type=CALL_TYPE, model_name=model_name, prompt_version=PROMPT_VERSION,
-                    attempt_no=call_no, status="ok" if filtered.accepted else "invalid_output", item_count=len(rows_by_id),
+                    attempt_no=call_no, status="ok" if filtered.complete else "invalid_output", item_count=len(areas),
                     latency_ms=latency_ms, error_code=parsed.problem, input_tokens=result.input_tokens,
                     output_tokens=result.output_tokens, created_at=now(),
                 )
@@ -166,23 +192,32 @@ def run_action_suggestions(
             for key in ("proposed", "accepted", "dropped_no_evidence", "dropped_number_mismatch", "dropped_other"):
                 counters[key] = filtered.counters[key]  # 마지막으로 검증한 시도의 건수
             counters["dropped_reasons"] = dict(filtered.dropped_reasons)
-            if filtered.accepted:
+            if filtered.complete:
                 break
             error_code = ERROR_INVALID_OUTPUT if parsed.problem else ERROR_NO_SUGGESTIONS
             if cost_guard is not None and cost_guard.exceeded:
                 error_code = ERROR_COST_LIMIT
                 break
 
-        accepted = final.accepted if final is not None else []
+        accepted = final.accepted if final is not None and final.complete else []
         if accepted:
             report = Report(round_id=round_row.round_id, family_id=family.family_id, run_id=run_id, generated_at=now())
             session.add(report)
             session.flush()
-            for order_no, item in enumerate(accepted, start=1):
+            cards = [
+                (
+                    render_area_card(card["area"], card["priority_sentence"], card["deliverable_kind"], card["deliverable_text"]),
+                    list(card["area"].row_ids),
+                )
+                for card in accepted
+            ]
+            review = review_card(rows_by_id)  # 쿠팡 리뷰 카드는 코드 템플릿이다(모델 호출 없음)
+            if review is not None:
+                cards.append(review)
+            for order_no, (sentence, row_ids) in enumerate(cards, start=1):
                 session.add(
                     ActionSuggestion(
-                        report_id=report.report_id, snapshot_id=snapshot_id, order_no=order_no,
-                        sentence=item["sentence"], row_ids=item["row_ids"],
+                        report_id=report.report_id, snapshot_id=snapshot_id, order_no=order_no, sentence=sentence, row_ids=row_ids,
                     )
                 )
             status, error_code = "succeeded", None

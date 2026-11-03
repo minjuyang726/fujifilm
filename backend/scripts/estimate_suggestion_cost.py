@@ -1,11 +1,11 @@
-"""액션 제안 서술(호출 B) 한 번의 예상 비용 상한을 계산한다. 읽기 전용이고 OpenAI를 부르지 않는다. DB에 쓰지 않는다.
+"""액션 카드 서술(호출 B, suggest-v4) 한 번의 예상 비용 상한을 계산한다. 읽기 전용이고 OpenAI를 부르지 않는다. DB에 쓰지 않는다.
 
 backend 폴더에서 실행한다.
   python scripts/estimate_suggestion_cost.py                 # 제품군 x 회차 모든 조합
   python scripts/estimate_suggestion_cost.py --family-id 2 --round-label 2026-Q1
 
 - 스냅샷을 메모리에서만 계산하고(저장하지 않음), 실제 프롬프트 글자 수로 estimate_suggestion_cost를 부른다.
-- 계수는 모두 가정이다(app/llm/cost.py SuggestionCalibration). 호출 B는 아직 실제로 불러 본 적이 없다.
+- 계수는 모두 가정이다(app/llm/cost.py SuggestionCalibration). suggest-v4(카드 3개 x (우선순위 문장 120자 + 산출물 200자))는 아직 실제로 불러 본 적이 없다.
 - 단가와 한도는 backend/.env의 OPENAI_PRICE_*, SUGGESTION_COST_LIMIT_USD를 쓴다(없으면 기본 한도 0.5). 숫자만 출력한다.
 """
 
@@ -22,9 +22,10 @@ from sqlalchemy.orm import Session  # noqa: E402
 from app.config import VOC_SMALL_SAMPLE_THRESHOLD, get_settings  # noqa: E402
 from app.db import make_engine  # noqa: E402
 from app.llm.cost import Prices, estimate_suggestion_cost  # noqa: E402
-from app.llm.prompts.suggestion import SYSTEM_PROMPT, build_user_prompt  # noqa: E402
 from app.models import ProductFamily, Round  # noqa: E402
 from app.services.snapshot import compute_snapshot  # noqa: E402
+from app.services.action_cards import select_areas  # noqa: E402
+from app.services.suggestion_step import option_labels, prompts_for_areas  # noqa: E402
 
 logging.disable(logging.CRITICAL)
 PREFIX = "[파일럿-임시]"
@@ -53,16 +54,17 @@ def main() -> int:
                     continue
                 if (args.family_id and family.family_id != args.family_id) or (args.round_label and round_row.label != args.round_label):
                     continue
-                table, _ = compute_snapshot(
+                table, evidence = compute_snapshot(
                     session, family, round_row, weight_floor=settings.ad_weight_floor, small_sample_threshold=VOC_SMALL_SAMPLE_THRESHOLD
                 )
-                user_prompt = build_user_prompt(table["family"], table["round"], table["rows"])
-                estimate = estimate_suggestion_cost(len(SYSTEM_PROMPT), len(user_prompt), prices)
+                areas = select_areas(table, evidence, option_labels(session, round_row.round_id))
+                system_prompt, user_prompt = prompts_for_areas(areas)
+                estimate = estimate_suggestion_cost(len(system_prompt), len(user_prompt), prices)
                 total_one += estimate.one_pass_usd
                 total_upper += estimate.upper_usd
                 count += 1
                 print(
-                    f"제품군 {family.family_id} {round_row.label}: 표 {len(table['rows'])}행, 프롬프트 글자 수 {len(SYSTEM_PROMPT)}(시스템) + {len(user_prompt)}(표)"
+                    f"제품군 {family.family_id} {round_row.label}: 영역 {len(areas)}개, 프롬프트 글자 수 {len(system_prompt)}(시스템) + {len(user_prompt)}(영역)"
                     f" | 입력 토큰 상한 {estimate.input_tokens:,}, 출력 토큰 상한 {estimate.output_tokens:,}"
                     f" | 한 번 ${estimate.one_pass_usd:.4f}, 재시도 배수 {3} 적용 ${estimate.upper_usd:.4f}"
                     f" | 한도 {'넘지 않음' if estimate.upper_usd <= limit else '넘음'}"

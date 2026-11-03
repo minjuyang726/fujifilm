@@ -1,23 +1,27 @@
-"""호출 B 출력의 JSON 스키마(spec.md 6.2절). 문장 길이·개수·row_id 존재는 suggestion_validators.py가 검사한다."""
+"""호출 B 출력의 JSON 스키마(suggest-v4 액션 카드). 영역 존재·중복·숫자 금지·자리표시자 규칙은 card_validators.py가 검사한다."""
 
-SCHEMA_NAME = "action_suggestions"
+from app.llm.prompts.suggestion import DELIVERABLE_KINDS
+
+SCHEMA_NAME = "action_cards"
 
 SUGGESTION_SCHEMA = {
     "type": "object",
     "properties": {
-        "suggestions": {
+        "cards": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
-                    "sentence": {"type": "string"},
-                    "row_ids": {"type": "array", "items": {"type": "string"}},
+                    "area_code": {"type": "string"},
+                    "priority_sentence": {"type": "string"},
+                    "deliverable_kind": {"type": "string", "enum": list(DELIVERABLE_KINDS)},
+                    "deliverable_text": {"type": "string"},
                 },
-                "required": ["sentence", "row_ids"],
+                "required": ["area_code", "priority_sentence", "deliverable_kind", "deliverable_text"],
                 "additionalProperties": False,
             },
         }
     },
-    "required": ["suggestions"],
+    "required": ["cards"],
     "additionalProperties": False,
 }
