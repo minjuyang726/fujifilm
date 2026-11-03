@@ -15,6 +15,8 @@ def isolate_from_real_services(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_MODEL_AD", raising=False)
     monkeypatch.delenv("OPENAI_MODEL_SUGGEST", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL_QUESTION", raising=False)
+    monkeypatch.delenv("QUESTION_COST_LIMIT_USD", raising=False)
     monkeypatch.delenv("SUGGESTION_COST_LIMIT_USD", raising=False)
     monkeypatch.delenv("AD_WEIGHT_FLOOR", raising=False)
     monkeypatch.delenv("AD_JUDGEMENT_MAX_ITEMS", raising=False)

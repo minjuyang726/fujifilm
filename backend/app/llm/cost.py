@@ -193,3 +193,50 @@ def estimate_suggestion_cost(
         upper_usd=one_pass * calibration.retry_multiplier,
         sum_based_upper_usd=one_pass * calibration.retry_multiplier,
     )
+
+
+@dataclass(frozen=True)
+class QuestionCalibration:
+    """호출 C(다음 회차 문항 초안)의 비용 추정 계수. 호출 C는 아직 실제로 불러 본 적이 없어서 모두 가정이다(실측 아님).
+
+    출력 = 고정 토큰 + 문항 수(가설 수, 최대 5) x (문항 100자 + 선택지 6개 x (30자 + 구조 10토큰) + 문항 구조 40토큰). 글자당 출력 토큰은 1.0이다.
+    호출 B에서 출력 토큰 가정(820)이 한 번 부족했던 일이 있어(실제 909) 선택지를 최대 길이로 잡았다.
+    """
+
+    tokens_per_char: float = 0.80
+    output_tokens_per_char: float = 1.0
+    max_questions: int = 5
+    max_question_chars: int = 100
+    max_options: int = 6
+    max_option_chars: int = 30
+    option_overhead_tokens: int = 10
+    question_overhead_tokens: int = 40
+    output_fixed_tokens: int = 20
+    retry_multiplier: int = 3
+
+
+QUESTION_CALIBRATION = QuestionCalibration()
+
+
+def estimate_question_cost(
+    system_chars: int, user_chars: int, prices: Prices, hypothesis_count: int, calibration: QuestionCalibration = QUESTION_CALIBRATION
+) -> CostEstimate:
+    """호출 C 한 번(재시도 없음)의 비용과, 재시도 배수를 곱한 상한. 실제 프롬프트 글자 수와 가설 수로 계산한다."""
+    questions = min(max(hypothesis_count, 0), calibration.max_questions)
+    input_tokens = math.ceil(calibration.tokens_per_char * (system_chars + user_chars))
+    per_question = (
+        math.ceil(calibration.max_question_chars * calibration.output_tokens_per_char)
+        + calibration.max_options * (math.ceil(calibration.max_option_chars * calibration.output_tokens_per_char) + calibration.option_overhead_tokens)
+        + calibration.question_overhead_tokens
+    )
+    output_tokens = calibration.output_fixed_tokens + questions * per_question
+    one_pass = token_cost_usd(input_tokens, output_tokens, prices)
+    return CostEstimate(
+        items=questions,
+        calls=1,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        one_pass_usd=one_pass,
+        upper_usd=one_pass * calibration.retry_multiplier,
+        sum_based_upper_usd=one_pass * calibration.retry_multiplier,
+    )

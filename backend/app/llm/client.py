@@ -27,6 +27,10 @@ class SuggestModelNotConfigured(LLMConfigError):
     """액션 제안 서술(호출 B)의 모델 이름(OPENAI_MODEL_SUGGEST)이 없다."""
 
 
+class QuestionModelNotConfigured(LLMConfigError):
+    """다음 회차 문항 초안(호출 C)의 모델 이름(OPENAI_MODEL_QUESTION)이 없다."""
+
+
 class LLMCallError(Exception):
     def __init__(self, code: str):
         super().__init__(code)
@@ -124,4 +128,12 @@ def get_suggest_model_name() -> str:
     model = get_settings().openai_model_suggest
     if not model:
         raise SuggestModelNotConfigured("OPENAI_MODEL_SUGGEST가 설정되지 않았습니다. backend/.env에 모델 이름을 넣어 주세요.")
+    return model
+
+
+def get_question_model_name() -> str:
+    """다음 회차 문항 초안(호출 C)에 쓸 모델 이름. 환경 값 OPENAI_MODEL_QUESTION에서만 읽는다."""
+    model = get_settings().openai_model_question
+    if not model:
+        raise QuestionModelNotConfigured("OPENAI_MODEL_QUESTION이 설정되지 않았습니다. backend/.env에 모델 이름을 넣어 주세요.")
     return model
