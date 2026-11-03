@@ -1,0 +1,631 @@
+{
+  "name": "정기 설문 폐루프 파이프라인 호출",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "13154e55-ba3b-5981-82d3-918ff31ab457",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ],
+      "notes": "수동으로만 시작한다. 예약 실행이나 외부 호출 트리거는 없다."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c1090dea-f5b8-56d1-a87e-09c71b69b65f",
+              "name": "baseUrl",
+              "value": "http://localhost:8000",
+              "type": "string"
+            },
+            {
+              "id": "9354275d-9724-5d41-9cfe-7004441feb36",
+              "name": "approveOpenAI",
+              "value": false,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "9217e0ef-3fa0-55ed-a397-7d2300ba24a1",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        300
+      ],
+      "notes": "baseUrl은 로컬 FastAPI 주소다. approveOpenAI는 OpenAI를 호출하는 단계 전에 확인하는 값이며 기본은 false다. 승인한 뒤에만 true로 바꾼다."
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.baseUrl }}/api/families",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "id": "c4b7e06e-1b2c-512d-9fda-bbd436f7b7ce",
+      "name": "GET families",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        300
+      ],
+      "notes": "GET /api/families",
+      "retryOnFail": false,
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 상태 코드가 200번대가 아니면 응답 본문(code, message)을 오류 메시지에 담아 즉시 멈춘다. 재시도하지 않는다.\nconst r = $input.item.json;\nif (r.statusCode < 200 || r.statusCode >= 300) {\n  throw new Error('GET /api/families HTTP ' + r.statusCode + ' ' + JSON.stringify(r.body));\n}\nreturn { json: { statusCode: r.statusCode, ...r.body } };"
+      },
+      "id": "93f72e92-c9b8-5c7d-8cc0-a436c0111ade",
+      "name": "Check families",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "notes": "HTTP 오류가 나면 응답 본문을 그대로 보이게 하고 워크플로우를 멈춘다."
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.baseUrl }}/api/rounds",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "id": "5f4e18a4-4057-5a16-802c-aef8821d9232",
+      "name": "GET rounds",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        300
+      ],
+      "notes": "GET /api/rounds",
+      "retryOnFail": false,
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 상태 코드가 200번대가 아니면 응답 본문(code, message)을 오류 메시지에 담아 즉시 멈춘다. 재시도하지 않는다.\nconst r = $input.item.json;\nif (r.statusCode < 200 || r.statusCode >= 300) {\n  throw new Error('GET /api/rounds HTTP ' + r.statusCode + ' ' + JSON.stringify(r.body));\n}\nreturn { json: { statusCode: r.statusCode, ...r.body } };"
+      },
+      "id": "c72bd323-2bed-5e36-bd6a-62d7ad128453",
+      "name": "Check rounds",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ],
+      "notes": "HTTP 오류가 나면 응답 본문을 그대로 보이게 하고 워크플로우를 멈춘다."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// 제품군 x 회차의 모든 조합을 한 줄씩 만든다. 조합 수는 두 목록 길이의 곱이다.\nconst families = $('Check families').first().json.families;\nconst rounds = $('Check rounds').first().json.rounds;\nconst out = [];\nfor (const f of families) {\n  for (const r of rounds) {\n    out.push({ json: { family_id: f.family_id, family_name: f.name, round_id: r.round_id, round_label: r.label } });\n  }\n}\nreturn out;"
+      },
+      "id": "76efdd9c-e7b0-5d40-b6da-176e0c34d121",
+      "name": "Build combos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ],
+      "notes": "제품군 x 회차 조합을 만든다."
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "f8686dbc-f674-5735-b6f7-3830a1f6244d",
+      "name": "Loop combos",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1540,
+        300
+      ],
+      "notes": "조합을 하나씩 처리한다. 위 출력(done)은 모든 조합이 끝났을 때, 아래 출력(loop)은 현재 조합이다."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.baseUrl }}/api/rounds/{{ $('Loop combos').item.json.round_id }}/pipeline/analysis-snapshot",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 300000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ family_id: $('Loop combos').item.json.family_id }) }}"
+      },
+      "id": "0217c375-a9f2-57fd-b3d6-d477303bc058",
+      "name": "POST analysis-snapshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        480
+      ],
+      "notes": "POST /api/rounds/{round_id}/pipeline/analysis-snapshot, 본문 {family_id}. OpenAI를 부르지 않는다.",
+      "retryOnFail": false,
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 상태 코드가 200번대가 아니면 응답 본문(code, message)을 오류 메시지에 담아 즉시 멈춘다. 재시도하지 않는다.\nconst r = $input.item.json;\nif (r.statusCode < 200 || r.statusCode >= 300) {\n  throw new Error('analysis-snapshot HTTP ' + r.statusCode + ' ' + JSON.stringify(r.body));\n}\nreturn { json: { statusCode: r.statusCode, ...r.body } };"
+      },
+      "id": "54d1ba9a-2a06-5891-a4a4-ed77b8e4b62e",
+      "name": "Check analysis-snapshot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        480
+      ],
+      "notes": "HTTP 오류가 나면 응답 본문을 그대로 보이게 하고 워크플로우를 멈춘다."
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// OpenAI를 호출하는 단계 전의 확인. Config의 approveOpenAI가 true가 아니면 멈춘다.\nif ($('Config').first().json.approveOpenAI !== true) {\n  throw new Error('OpenAI 호출 승인 전입니다. 승인한 뒤에 Config 노드의 approveOpenAI를 true로 바꿔 다시 실행하세요.');\n}\nreturn $input.all();"
+      },
+      "id": "0af944be-cb87-5e58-b595-658ccb671818",
+      "name": "Gate OpenAI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        480
+      ],
+      "notes": "승인 전에는 action-suggestions를 호출하지 않는다."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.baseUrl }}/api/rounds/{{ $('Loop combos').item.json.round_id }}/pipeline/action-suggestions",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 300000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ family_id: $('Loop combos').item.json.family_id }) }}"
+      },
+      "id": "5976b866-842f-5df8-b480-7d907f68930c",
+      "name": "POST action-suggestions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        480
+      ],
+      "notes": "POST /api/rounds/{round_id}/pipeline/action-suggestions, 본문 {family_id}. 서버 안에서 OpenAI를 호출하고 비용 가드가 있다.",
+      "retryOnFail": false,
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 상태 코드가 200번대가 아니면 응답 본문(code, message)을 오류 메시지에 담아 즉시 멈춘다. 재시도하지 않는다.\nconst r = $input.item.json;\nif (r.statusCode < 200 || r.statusCode >= 300) {\n  throw new Error('action-suggestions HTTP ' + r.statusCode + ' ' + JSON.stringify(r.body));\n}\nreturn { json: { statusCode: r.statusCode, ...r.body } };"
+      },
+      "id": "7b0b29fb-8e9b-5d2f-994d-e42814b0070e",
+      "name": "Check action-suggestions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        480
+      ],
+      "notes": "HTTP 오류가 나면 응답 본문을 그대로 보이게 하고 워크플로우를 멈춘다."
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "httpMethod": "GET",
+        "options": {}
+      },
+      "id": "7056ec19-a17b-55b9-bf8e-1cf1c4beb6fc",
+      "name": "Wait for review",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2860,
+        480
+      ],
+      "notes": "담당자가 액션 제안을 검토한 뒤 재개해야 다음 단계로 간다. 재개 전에는 next-survey-draft를 호출하지 않는다.",
+      "webhookId": "4e849498-5395-5152-ba6f-5f1b918dc9ab"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.baseUrl }}/api/rounds/{{ $('Loop combos').item.json.round_id }}/pipeline/next-survey-draft",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 300000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ family_id: $('Loop combos').item.json.family_id }) }}"
+      },
+      "id": "67d4c6dc-3d31-590a-835d-89d2f2cadd2a",
+      "name": "POST next-survey-draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        480
+      ],
+      "notes": "POST /api/rounds/{round_id}/pipeline/next-survey-draft, 본문 {family_id}. 서버 안에서 OpenAI를 호출하고 비용 가드가 있다.",
+      "retryOnFail": false,
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 상태 코드가 200번대가 아니면 응답 본문(code, message)을 오류 메시지에 담아 즉시 멈춘다. 재시도하지 않는다.\nconst r = $input.item.json;\nif (r.statusCode < 200 || r.statusCode >= 300) {\n  throw new Error('next-survey-draft HTTP ' + r.statusCode + ' ' + JSON.stringify(r.body));\n}\nreturn { json: { statusCode: r.statusCode, ...r.body } };"
+      },
+      "id": "80bf932a-bb7a-5fde-9c78-1c38dda665bc",
+      "name": "Check next-survey-draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        480
+      ],
+      "notes": "HTTP 오류가 나면 응답 본문을 그대로 보이게 하고 워크플로우를 멈춘다."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.baseUrl }}/api/rounds/{{ $('Loop combos').item.json.round_id }}/pipeline/report-assembly",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 300000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ family_id: $('Loop combos').item.json.family_id }) }}"
+      },
+      "id": "b948e3c7-5c89-5af2-bf79-9c906556b019",
+      "name": "POST report-assembly",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3520,
+        480
+      ],
+      "notes": "POST /api/rounds/{round_id}/pipeline/report-assembly, 본문 {family_id}. OpenAI를 부르지 않고 확인 기록만 남긴다.",
+      "retryOnFail": false,
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 상태 코드가 200번대가 아니면 응답 본문(code, message)을 오류 메시지에 담아 즉시 멈춘다. 재시도하지 않는다.\nconst r = $input.item.json;\nif (r.statusCode < 200 || r.statusCode >= 300) {\n  throw new Error('report-assembly HTTP ' + r.statusCode + ' ' + JSON.stringify(r.body));\n}\nreturn { json: { statusCode: r.statusCode, ...r.body } };"
+      },
+      "id": "27c0f32b-80cf-5c77-9912-c8bdc139d195",
+      "name": "Check report-assembly",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3740,
+        480
+      ],
+      "notes": "HTTP 오류가 나면 응답 본문을 그대로 보이게 하고 워크플로우를 멈춘다."
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Config').first().json.baseUrl }}/api/reports",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "id": "2d8ab683-6b71-5c15-9ad1-920ea627b4f6",
+      "name": "GET reports",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        120
+      ],
+      "notes": "GET /api/reports. 모든 조합이 끝난 뒤 결과 목록을 확인한다.",
+      "retryOnFail": false,
+      "onError": "stopWorkflow"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 상태 코드가 200번대가 아니면 응답 본문(code, message)을 오류 메시지에 담아 즉시 멈춘다. 재시도하지 않는다.\nconst r = $input.item.json;\nif (r.statusCode < 200 || r.statusCode >= 300) {\n  throw new Error('GET /api/reports HTTP ' + r.statusCode + ' ' + JSON.stringify(r.body));\n}\nreturn { json: { statusCode: r.statusCode, ...r.body } };"
+      },
+      "id": "860609ed-8d92-5f47-9b5e-35862cb96331",
+      "name": "Check reports",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        120
+      ],
+      "notes": "HTTP 오류가 나면 응답 본문을 그대로 보이게 하고 워크플로우를 멈춘다."
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "GET families",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET families": {
+      "main": [
+        [
+          {
+            "node": "Check families",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check families": {
+      "main": [
+        [
+          {
+            "node": "GET rounds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET rounds": {
+      "main": [
+        [
+          {
+            "node": "Check rounds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check rounds": {
+      "main": [
+        [
+          {
+            "node": "Build combos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build combos": {
+      "main": [
+        [
+          {
+            "node": "Loop combos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop combos": {
+      "main": [
+        [
+          {
+            "node": "GET reports",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "POST analysis-snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST analysis-snapshot": {
+      "main": [
+        [
+          {
+            "node": "Check analysis-snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check analysis-snapshot": {
+      "main": [
+        [
+          {
+            "node": "Gate OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gate OpenAI": {
+      "main": [
+        [
+          {
+            "node": "POST action-suggestions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST action-suggestions": {
+      "main": [
+        [
+          {
+            "node": "Check action-suggestions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check action-suggestions": {
+      "main": [
+        [
+          {
+            "node": "Wait for review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for review": {
+      "main": [
+        [
+          {
+            "node": "POST next-survey-draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST next-survey-draft": {
+      "main": [
+        [
+          {
+            "node": "Check next-survey-draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check next-survey-draft": {
+      "main": [
+        [
+          {
+            "node": "POST report-assembly",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST report-assembly": {
+      "main": [
+        [
+          {
+            "node": "Check report-assembly",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check report-assembly": {
+      "main": [
+        [
+          {
+            "node": "Loop combos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET reports": {
+      "main": [
+        [
+          {
+            "node": "Check reports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
