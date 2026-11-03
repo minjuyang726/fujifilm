@@ -23,6 +23,18 @@ DROPPED_NO_EVIDENCE = "dropped_no_evidence"
 DROPPED_NUMBER_MISMATCH = "dropped_number_mismatch"
 DROPPED_OTHER = "dropped_other"
 
+# dropped_other의 사유 코드(counters.dropped_reasons에 센다. 문장 본문은 저장하지 않는다)
+REASON_EMPTY = "empty"
+REASON_TOO_LONG = "too_long"
+REASON_MULTI_SENTENCE = "multi_sentence"
+REASON_CHANGE_AFTER_NUMBER = "change_after_number"
+REASON_CAUSAL_CONNECTOR = "causal_connector"
+REASON_CAUSAL_AFTER_NUMBER = "causal_after_number"
+REASON_MISSING_SYNTHETIC = "missing_synthetic_word"
+REASON_MISSING_SAMPLE = "missing_sample_word"
+REASON_DUPLICATE = "duplicate"
+REASON_OVER_LIMIT = "over_sentence_limit"
+
 SYNTHETIC_WORD = "합성"
 SMALL_SAMPLE_WORD = "표본"
 
@@ -47,6 +59,10 @@ _SINO_QUANTITY = re.compile(rf"(?<![가-힣]){_SINO_NUMBER}\s*(?:문항|퍼센�
 # (2) 이므로|때문에|따라서|그래서|덕분에는 표에 없는 인과를 단정한다. 관찰과 제안은 따로 쓰게 한다.
 # 두 경우 모두 값이 표와 일치해도 문장의 뜻이 표에 없는 내용을 만든다. 문항·선택지 라벨 속 글자(예: "개선할 점 없음")는 검사에서 뺀다.
 _CHANGE_AFTER_NUMBER = re.compile(r"\d+(?:\.\d+)?\s*(?:%|퍼센트|건|명|점|개|배|포인트)?\s*(?:개선|증가|감소|확대|축소|향상|상승|하락|인상|인하)")
+# 숫자·단위 바로 뒤의 "여서/이어서/이라서/라서"도 같은 인과 연결이다(결정 2026-11-03). 근거: suggest-v3 통과 문장 16개 중 3개가
+# "37%여서", "71.4%여서", "100%여서"처럼 숫자 뒤에 이 연결을 썼다. 라벨 속 글자는 검사에서 뺀다. 일반 명사 뒤의 "~라서"까지 막지 않도록
+# 숫자(와 단위) 바로 뒤일 때만 잡는다.
+_CAUSAL_AFTER_NUMBER = re.compile(r"\d+(?:\.\d+)?\s*(?:%|퍼센트|건|명|점|개|배|포인트)?\s*(?:이어서|이라서|여서|라서)")
 _CAUSAL = re.compile(r"므로|때문에|따라서|그래서|덕분에")  # 므로: 이므로(사용자 목록)에 더해 했으므로, 하므로도 같은 인과 연결이라 포함했다
 
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
@@ -125,33 +141,49 @@ def numbers_match(sentence: str, rows: list[dict], family: str, round_label: str
     return all(_matches(token, values) for token in _numbers_in(cleaned))
 
 
-def check_sentence(
+def evaluate_sentence(
     item: dict, rows_by_id: dict[str, dict], allowed_evidence: dict, family: str, round_label: str
-) -> str | None:
-    """통과하면 None, 제외하면 사유 코드를 돌려준다."""
+) -> tuple[str | None, str | None]:
+    """(제외 범주, 제외 사유 코드)를 돌려준다. 통과하면 (None, None). 사유 코드는 dropped_other일 때만 있다."""
     sentence = item["sentence"].strip()
     row_ids = item["row_ids"]
     # (3) row_ids가 입력 표에 있고 하나 이상이다 / (5) 근거 합집합이 비어 있으면 뺀다 (FR-2.4)
     if not row_ids or any(row_id not in rows_by_id for row_id in row_ids):
-        return DROPPED_NO_EVIDENCE
+        return DROPPED_NO_EVIDENCE, None
     if not any(allowed_evidence.get(row_id, {}).get("ids") for row_id in row_ids):
-        return DROPPED_NO_EVIDENCE
-    if not sentence or len(sentence) > MAX_SENTENCE_CHARS or "\n" in sentence or len(_SENTENCE_END.findall(sentence)) > 1:
-        return DROPPED_OTHER
+        return DROPPED_NO_EVIDENCE, None
+    if not sentence:
+        return DROPPED_OTHER, REASON_EMPTY
+    if len(sentence) > MAX_SENTENCE_CHARS:
+        return DROPPED_OTHER, REASON_TOO_LONG
+    if "\n" in sentence or len(_SENTENCE_END.findall(sentence)) > 1:
+        return DROPPED_OTHER, REASON_MULTI_SENTENCE
     rows = [rows_by_id[row_id] for row_id in dict.fromkeys(row_ids)]
     # (4) 문장 속 숫자가 참조한 행의 값과 일치한다 (FR-0.3). 한글 수량 표현은 비교할 수 없으므로 제외한다.
     labels = [family, round_label] + [part.strip() for row in rows for part in row["item"].split(" — ")]
-    if has_korean_quantity(_strip_labels(sentence, labels)):
-        return DROPPED_NUMBER_MISMATCH
+    cleaned = _strip_labels(sentence, labels)
+    if has_korean_quantity(cleaned):
+        return DROPPED_NUMBER_MISMATCH, None
     if not numbers_match(sentence, rows, family, round_label):
-        return DROPPED_NUMBER_MISMATCH
-    if _CHANGE_AFTER_NUMBER.search(_strip_labels(sentence, labels)) or _CAUSAL.search(_strip_labels(sentence, labels)):
-        return DROPPED_OTHER
+        return DROPPED_NUMBER_MISMATCH, None
+    if _CHANGE_AFTER_NUMBER.search(cleaned):
+        return DROPPED_OTHER, REASON_CHANGE_AFTER_NUMBER
+    if _CAUSAL.search(cleaned):
+        return DROPPED_OTHER, REASON_CAUSAL_CONNECTOR
+    if _CAUSAL_AFTER_NUMBER.search(cleaned):
+        return DROPPED_OTHER, REASON_CAUSAL_AFTER_NUMBER
     if any(row["source"] == SYNTHETIC_WORD for row in rows) and SYNTHETIC_WORD not in sentence:
-        return DROPPED_OTHER
+        return DROPPED_OTHER, REASON_MISSING_SYNTHETIC
     if any(row.get("small_sample") for row in rows) and SMALL_SAMPLE_WORD not in sentence:
-        return DROPPED_OTHER
-    return None
+        return DROPPED_OTHER, REASON_MISSING_SAMPLE
+    return None, None
+
+
+def check_sentence(
+    item: dict, rows_by_id: dict[str, dict], allowed_evidence: dict, family: str, round_label: str
+) -> str | None:
+    """통과하면 None, 제외하면 범주 코드를 돌려준다(사유 코드는 evaluate_sentence)."""
+    return evaluate_sentence(item, rows_by_id, allowed_evidence, family, round_label)[0]
 
 
 @dataclass
@@ -166,6 +198,7 @@ class FilterResult:
             "dropped_other": 0,
         }
     )
+    dropped_reasons: dict = field(default_factory=dict)  # dropped_other의 사유 코드별 건수
 
 
 def filter_suggestions(
@@ -176,15 +209,18 @@ def filter_suggestions(
     seen: set[str] = set()
     for item in items:
         result.counters["proposed"] += 1
-        reason = check_sentence(item, rows_by_id, allowed_evidence, family, round_label)
+        reason, detail = evaluate_sentence(item, rows_by_id, allowed_evidence, family, round_label)
         if reason is None:
             sentence = item["sentence"].strip()
             if sentence in seen or len(result.accepted) >= MAX_SENTENCES:
                 reason = DROPPED_OTHER
+                detail = REASON_DUPLICATE if sentence in seen else REASON_OVER_LIMIT
             else:
                 seen.add(sentence)
                 result.accepted.append({"sentence": sentence, "row_ids": list(dict.fromkeys(item["row_ids"]))})
                 result.counters["accepted"] += 1
                 continue
         result.counters[reason] += 1
+        if reason == DROPPED_OTHER and detail:
+            result.dropped_reasons[detail] = result.dropped_reasons.get(detail, 0) + 1
     return result

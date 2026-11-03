@@ -93,6 +93,7 @@ def run_action_suggestions(
             "dropped_no_evidence": 0,
             "dropped_number_mismatch": 0,
             "dropped_other": 0,
+            "dropped_reasons": {},  # dropped_other의 사유 코드별 건수(문장 본문은 저장하지 않는다)
             "attempts": 0,
             "llm_calls": 0,
         }
@@ -164,6 +165,7 @@ def run_action_suggestions(
             final = filtered
             for key in ("proposed", "accepted", "dropped_no_evidence", "dropped_number_mismatch", "dropped_other"):
                 counters[key] = filtered.counters[key]  # 마지막으로 검증한 시도의 건수
+            counters["dropped_reasons"] = dict(filtered.dropped_reasons)
             if filtered.accepted:
                 break
             error_code = ERROR_INVALID_OUTPUT if parsed.problem else ERROR_NO_SUGGESTIONS

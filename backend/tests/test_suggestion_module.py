@@ -292,4 +292,62 @@ def test_change_word_not_directly_after_a_number_is_allowed():
     assert check("합성 설문에서 응답자의 33%가 필름·소모품 비용을 선택했고 개선 방안을 검토한다.", ["survey:q08:1"]) is None
 
 
+# ---------- 숫자 뒤 '여서/이어서/이라서/라서' (인과 연결, 0-a) ----------
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "합성 설문에서 33%여서 가격 안을 검토한다.",
+        "합성 설문에서 응답이 49건이어서 안내를 보강한다.",
+        "합성 설문에서 추천 응답이 49건이라서 안내를 보강한다.",
+        "합성 설문에서 비율이 28.4%라서 안내를 보강한다.",
+        "합성 설문에서 응답이 49 건 이어서 안내를 보강한다.",
+    ],
+)
+def test_connective_right_after_a_number_is_dropped_as_other(sentence):
+    rows = ["survey:q09:1"] if "49" in sentence else ["survey:q08:1"]
+    if "28.4" in sentence:
+        rows = ["survey:q10:3"]
+    assert check(sentence, rows) == DROPPED_OTHER
+
+
+def test_connective_not_after_a_number_and_label_text_are_not_blocked():
+    # 숫자 바로 뒤가 아니면 막지 않는다
+    assert check("합성 설문에서 응답이 49건으로 추천 안내를 보강한다.", ["survey:q09:1"]) is None
+    assert check("합성 설문에서 응답은 49건이고 서비스 담당자라서 안내를 보강한다.", ["survey:q09:1"]) is None
+    # 라벨 속 글자는 검사에서 뺀다
+    rows = {"x": {"row_id": "x", "group": "설문", "source": "합성", "item": "대상 — 학생이라서 구매", "metrics": {"응답 수": 3}, "small_sample": False}}
+    evidence = {"x": {"kind": "survey", "ids": [1]}}
+    assert check_sentence({"sentence": "합성 설문에서 학생이라서 구매는 3건이다.", "row_ids": ["x"]}, rows, evidence, FAMILY, ROUND) is None
+
+
+# ---------- dropped_other 사유 코드 (0-b) ----------
+def test_dropped_other_reasons_are_counted_by_code():
+    items = [
+        {"sentence": "합성 설문에서 추천 응답이 49건이다.", "row_ids": ["survey:q09:1"]},  # 통과
+        {"sentence": "합성 설문에서 추천 응답이 49건이다.", "row_ids": ["survey:q09:1"]},  # duplicate
+        {"sentence": "추천 응답이 49건이다.", "row_ids": ["survey:q09:1"]},  # missing_synthetic_word
+        {"sentence": "판정 묶음 가중 평균 평점이 4.86이다.", "row_ids": ["voc:judged:mean_weighted"]},  # missing_sample_word
+        {"sentence": "합성 설문에서 33% 개선을 검토한다.", "row_ids": ["survey:q08:1"]},  # change_after_number
+        {"sentence": "합성 설문에서 33%가 선택했기 때문에 검토한다.", "row_ids": ["survey:q08:1"]},  # causal_connector
+        {"sentence": "합성 설문에서 33%여서 검토한다.", "row_ids": ["survey:q08:1"]},  # causal_after_number
+        {"sentence": "합" + "성" * 130, "row_ids": ["survey:q09:1"]},  # too_long
+        {"sentence": "합성 응답이다. 그리고 다른 문장이다.", "row_ids": ["survey:q09:1"]},  # multi_sentence
+        {"sentence": "   ", "row_ids": ["survey:q09:1"]},  # empty
+    ]
+    result = filter_suggestions(items, BY_ID, EVIDENCE, FAMILY, ROUND)
+    assert result.counters["dropped_other"] == 9 and result.counters["accepted"] == 1
+    assert result.dropped_reasons == {
+        "duplicate": 1, "missing_synthetic_word": 1, "missing_sample_word": 1, "change_after_number": 1,
+        "causal_connector": 1, "causal_after_number": 1, "too_long": 1, "multi_sentence": 1, "empty": 1,
+    }
+    assert sum(result.dropped_reasons.values()) == result.counters["dropped_other"]
+    assert "추천 응답이 49건" not in json.dumps(result.dropped_reasons, ensure_ascii=False)  # 문장 본문은 없다
+
+
+def test_over_sentence_limit_reason():
+    items = [{"sentence": f"합성 설문 응답이 49건이다{'가' * n}", "row_ids": ["survey:q09:1"]} for n in range(7)]
+    result = filter_suggestions(items, BY_ID, EVIDENCE, FAMILY, ROUND)
+    assert result.dropped_reasons == {"over_sentence_limit": 2}
+
+
 EXPECTED_FINGERPRINT = "725fbb6220faab21f290a37529c0a88c24d2d0be57ba3c7256147ce9b5b9dc03"

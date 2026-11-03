@@ -107,7 +107,7 @@ def test_full_flow_saves_report_suggestions_and_counters(world):
     run = world.session.get(PipelineRun, body["run_id"])
     assert run.counters == {
         "proposed": 3, "accepted": 2, "dropped_no_evidence": 0, "dropped_number_mismatch": 1, "dropped_other": 0,
-        "attempts": 1, "llm_calls": 1,
+        "dropped_reasons": {}, "attempts": 1, "llm_calls": 1,
     }
     assert run.error_code is None and run.family_id == 1
     report = world.session.scalar(select(Report).where(Report.run_id == run.run_id))
