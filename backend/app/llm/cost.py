@@ -152,3 +152,44 @@ def suggest_calibration(samples: list[CallSample], current: Calibration = CALIBR
         output_tokens_per_item=max(per_item_out, 0),
         samples_used=len(usable),
     )
+
+
+@dataclass(frozen=True)
+class SuggestionCalibration:
+    """호출 B(액션 제안 서술)의 비용 추정 계수. 호출 B는 아직 실제로 불러 본 적이 없어서 모두 가정이다(실측 아님).
+
+    - 입력: 시스템 프롬프트와 사용자 프롬프트의 글자 수 × 글자당 토큰. 0.80은 호출 A에서 한국어 리뷰로 잰 값의 상한이고,
+      JSON 기호와 숫자가 많은 표에도 맞는지는 확인되지 않았다.
+    - 출력: 문장 최대 5개 × (120자 × 글자당 토큰 + 문장당 구조 토큰) + 고정 토큰.
+    - 재시도 배수: 같은 요청이 청구될 수 있는 최대 횟수 = 1 + 전체 재요청 2회.
+    """
+
+    tokens_per_char: float = 0.80
+    output_tokens_per_char: float = 1.0
+    output_overhead_per_sentence: int = 40
+    output_fixed_tokens: int = 20
+    max_sentences: int = 5
+    max_sentence_chars: int = 120
+    retry_multiplier: int = 3
+
+
+SUGGESTION_CALIBRATION = SuggestionCalibration()
+
+
+def estimate_suggestion_cost(
+    system_chars: int, user_chars: int, prices: Prices, calibration: SuggestionCalibration = SUGGESTION_CALIBRATION
+) -> CostEstimate:
+    """호출 B 한 번(재시도 없음)의 비용과, 재시도 배수를 곱한 상한. 실제 표 크기(user_chars)로 계산한다."""
+    input_tokens = math.ceil(calibration.tokens_per_char * (system_chars + user_chars))
+    per_sentence = math.ceil(calibration.max_sentence_chars * calibration.output_tokens_per_char) + calibration.output_overhead_per_sentence
+    output_tokens = calibration.output_fixed_tokens + calibration.max_sentences * per_sentence
+    one_pass = token_cost_usd(input_tokens, output_tokens, prices)
+    return CostEstimate(
+        items=1,
+        calls=1,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        one_pass_usd=one_pass,
+        upper_usd=one_pass * calibration.retry_multiplier,
+        sum_based_upper_usd=one_pass * calibration.retry_multiplier,
+    )

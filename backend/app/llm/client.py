@@ -23,6 +23,10 @@ class ModelNotConfigured(LLMConfigError):
     """모델 이름(OPENAI_MODEL_AD)이 없다."""
 
 
+class SuggestModelNotConfigured(LLMConfigError):
+    """액션 제안 서술(호출 B)의 모델 이름(OPENAI_MODEL_SUGGEST)이 없다."""
+
+
 class LLMCallError(Exception):
     def __init__(self, code: str):
         super().__init__(code)
@@ -113,3 +117,11 @@ class OpenAIClient:
 def build_default_client() -> OpenAIClient:
     """기본 클라이언트. OPENAI_API_KEY가 없으면 LLMConfigError를 낸다."""
     return OpenAIClient()
+
+
+def get_suggest_model_name() -> str:
+    """액션 제안 서술(호출 B)에 쓸 모델 이름. 환경 값 OPENAI_MODEL_SUGGEST에서만 읽는다."""
+    model = get_settings().openai_model_suggest
+    if not model:
+        raise SuggestModelNotConfigured("OPENAI_MODEL_SUGGEST가 설정되지 않았습니다. backend/.env에 모델 이름을 넣어 주세요.")
+    return model

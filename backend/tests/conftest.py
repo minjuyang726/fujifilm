@@ -14,6 +14,9 @@ def isolate_from_real_services(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite://")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_MODEL_AD", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL_SUGGEST", raising=False)
+    monkeypatch.delenv("SUGGESTION_COST_LIMIT_USD", raising=False)
+    monkeypatch.delenv("AD_WEIGHT_FLOOR", raising=False)
     monkeypatch.delenv("AD_JUDGEMENT_MAX_ITEMS", raising=False)
     # 비용 가드: 테스트는 실제 단가를 쓰지 않는다. 단가는 시험용 값(실제 단가와 무관)을 넣고 한도는 기본값을 쓴다.
     monkeypatch.delenv("AD_JUDGEMENT_COST_LIMIT_USD", raising=False)
