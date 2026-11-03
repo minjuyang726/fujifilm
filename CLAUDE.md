@@ -12,7 +12,7 @@
 | `docs/spec.md` | 기술 스택, 폴더 구조, 데이터 모델, API, LLM 호출, 로그 |
 | `docs/plan.md` | Phase별 계획, 완료 확인 기준, 일정, 컷 후보 |
 
-폴더: `backend/`(FastAPI), `frontend/`(React), `database/`(`database/data/`는 원본 CSV·합성 결과, 미추적), `docs/`. 루트의 `쿠팡 크롤러/`는 이 프로젝트 범위 밖이므로 건드리지 않는다.
+폴더: `backend/`(FastAPI), `frontend/`(React), `database/`(`database/data/`는 원본 CSV·합성 결과, 미추적), `docs/`. 쿠팡 리뷰 수집 코드는 이 저장소에 없다. 분석에는 수집된 CSV 적재분만 쓴다(docs/data_quality.md 5절).
 
 ## 작업 규칙
 

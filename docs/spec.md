@@ -39,7 +39,7 @@
 
 ## 2. 폴더 구조
 
-루트에는 `frontend`, `backend`, `database`, `docs`가 있습니다. 루트에 원래 있던 `쿠팡 크롤러` 폴더는 이 명세의 범위 밖이며 건드리지 않습니다.
+루트에는 `frontend`, `backend`, `database`, `docs`가 있습니다. 쿠팡 리뷰 수집 코드는 이 저장소에 없습니다. 분석에는 수집된 CSV 적재분만 씁니다(docs/data_quality.md 5절).
 
 ```
 fujifilm/
