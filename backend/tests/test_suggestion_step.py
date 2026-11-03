@@ -117,7 +117,7 @@ def test_full_flow_saves_report_suggestions_and_counters(world):
     assert saved[0].row_ids == [Q09] and all(s.snapshot_id == snapshot.snapshot_id for s in saved)
     log = world.session.scalars(select(LlmCallLog)).all()
     assert len(log) == 1 and log[0].call_type == "B" and log[0].status == "ok" and log[0].model_name == "fake-model"
-    assert log[0].prompt_version == "suggest-v2" and (log[0].input_tokens, log[0].output_tokens) == (1500, 300)
+    assert log[0].prompt_version == "suggest-v3" and (log[0].input_tokens, log[0].output_tokens) == (1500, 300)
     # 호출 B에는 근거 ID와 본문이 가지 않는다
     sent = fake.calls[0]["user_prompt"]
     assert "allowed_evidence" not in sent and "review_text" not in sent and fake.calls[0]["model"] == "fake-model"

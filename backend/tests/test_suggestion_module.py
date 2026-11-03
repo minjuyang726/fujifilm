@@ -21,6 +21,10 @@ ROWS = [
      "metrics": {"응답 수": 28, "비율(%)": 28.0, "선택지 번호": 5}, "small_sample": False},
     {"row_id": "survey:q10:3", "group": "설문", "source": "합성", "item": "얼마나 자주 사용하셨나요? — 월 1~3회",
      "metrics": {"응답 수": 28, "비율(%)": 28.4, "선택지 번호": 3}, "small_sample": False},
+    {"row_id": "survey:q08:1", "group": "설문", "source": "합성", "item": "개선되었으면 하는 점을 모두 골라 주세요. — 필름·소모품 비용",
+     "metrics": {"응답 수": 33, "비율(%)": 33.0, "선택지 번호": 1}, "small_sample": False},
+    {"row_id": "survey:q08:5", "group": "설문", "source": "합성", "item": "개선되었으면 하는 점을 모두 골라 주세요. — 개선할 점 없음",
+     "metrics": {"응답 수": 26, "비율(%)": 26.0, "선택지 번호": 5}, "small_sample": False},
     {"row_id": "voc:total:count", "group": "VOC", "source": "실측", "item": "VOC 전체 리뷰(선택한 제품군·회차)",
      "metrics": {"리뷰 수": 37}, "small_sample": False},
     {"row_id": "voc:judged:mean_weighted", "group": "VOC", "source": "실측", "item": "판정 묶음 가중 평균 평점",
@@ -32,6 +36,8 @@ EVIDENCE = {
     "survey:q09:1": {"kind": "survey", "ids": [1, 2, 3]},
     "survey:q01:5": {"kind": "survey", "ids": [4]},
     "survey:q10:3": {"kind": "survey", "ids": [5]},
+    "survey:q08:1": {"kind": "survey", "ids": [6, 7]},
+    "survey:q08:5": {"kind": "survey", "ids": [8]},
     "voc:total:count": {"kind": "review", "ids": [10, 11]},
     "voc:judged:mean_weighted": {"kind": "review", "ids": [10]},
     "voc:empty": {"kind": "review", "ids": []},
@@ -44,14 +50,14 @@ def check(sentence, row_ids):
 
 # ---------- 프롬프트와 스키마 ----------
 def test_prompt_version_and_fingerprint_are_pinned():
-    assert prompt.PROMPT_VERSION == "suggest-v2"
+    assert prompt.PROMPT_VERSION == "suggest-v3"
     # 문구를 바꾸면 이 값과 PROMPT_VERSION을 같이 바꾼다
     assert prompt.prompt_fingerprint() == EXPECTED_FINGERPRINT
 
 
 def test_prompt_contains_the_required_rules():
     text = prompt.SYSTEM_PROMPT
-    for needle in ("아라비아 숫자", "표에 없는 숫자를 만들지 않는다", "합성", "표본", "120자", "최대 5개", "row_ids", "절반, 두 배, 세 건 같은 한글 수량 표현은 쓰지 않는다"):
+    for needle in ("아라비아 숫자", "표에 없는 숫자를 만들지 않는다", "합성", "표본", "120자", "최대 5개", "row_ids", "절반, 두 배, 세 건 같은 한글 수량 표현은 쓰지 않는다", "숫자 바로 뒤에 개선, 증가, 감소", "이므로, 때문에, 따라서, 그래서", "제안은 별도 절로 쓴다"):
         assert needle in text
     for forbidden in ("author", "variant"):  # 영어 키 이름은 쓰지 않는다
         assert forbidden not in text
@@ -230,4 +236,60 @@ def test_labels_are_removed_before_the_korean_quantity_check():
     assert check_sentence({"sentence": "합성 설문의 한 가지 이상 응답은 3건이다.", "row_ids": ["x"]}, rows, evidence, FAMILY, ROUND) is None
 
 
-EXPECTED_FINGERPRINT = "89d9ba3b327fa83f98a9f356e582b394dbd62d81bed11cf10d8a4a977adfb811"
+# ---------- 변화·인과 표현 (suggest-v3) ----------
+CHANGE_SENTENCES = [
+    "합성 설문에서 필름·소모품 비용 33% 개선을 우선 검토한다.",
+    "합성 설문에서 필름·소모품 비용 33 % 개선을 우선 검토한다.",
+    "합성 설문에서 필름·소모품 비용이 33건 증가했다.",
+    "합성 설문에서 필름·소모품 33퍼센트 감소를 목표로 한다.",
+    "합성 설문에서 필름·소모품 비용 33% 확대를 검토한다.",
+    "합성 설문에서 필름·소모품 비용 33% 축소를 검토한다.",
+    "합성 설문에서 필름·소모품 비용 33점 향상을 검토한다.",
+    "합성 설문에서 필름·소모품 비용 33% 상승을 검토한다.",
+    "합성 설문에서 필름·소모품 비용 33% 하락을 검토한다.",
+    "합성 설문에서 필름·소모품 비용 33% 인상을 검토한다.",
+    "합성 설문에서 필름·소모품 비용 33% 인하를 검토한다.",
+    "합성 설문에서 필름·소모품 비용 33개선을 검토한다.",
+]
+CAUSAL_SENTENCES = [
+    "합성 설문에서 응답의 33%가 필름·소모품 비용이므로 가격 안을 검토한다.",
+    "합성 설문에서 33%가 필름·소모품 비용을 선택했으므로 가격 안을 검토한다.",
+    "합성 설문에서 33%가 필름·소모품 비용을 골라 비용 부담이 크므로 가격 안을 검토한다.",
+    "합성 설문에서 33%가 필름·소모품 비용을 선택했기 때문에 가격 안을 검토한다.",
+    "합성 설문에서 33%가 필름·소모품 비용을 선택했다 따라서 가격 안을 검토한다.",
+    "합성 설문에서 33%가 필름·소모품 비용을 선택했고 그래서 가격 안을 검토한다.",
+    "합성 설문에서 33%가 필름·소모품 비용을 선택한 덕분에 가격 안을 검토한다.",
+]
+
+
+@pytest.mark.parametrize("sentence", CHANGE_SENTENCES)
+def test_change_expressions_right_after_a_number_are_dropped_as_other(sentence):
+    # 숫자(33)는 표의 값과 일치하므로 숫자 검증은 통과하고, 변화 표현 때문에 dropped_other가 된다
+    assert check(sentence, ["survey:q08:1"]) == DROPPED_OTHER
+
+
+@pytest.mark.parametrize("sentence", CAUSAL_SENTENCES)
+def test_causal_connectors_are_dropped_as_other(sentence):
+    assert check(sentence, ["survey:q08:1"]) == DROPPED_OTHER
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "합성 설문에서 응답자의 33%가 '필름·소모품 비용'을 선택했고 비용 부담을 줄이는 방안을 검토한다.",
+        "합성 설문에서 응답자의 33%가 '필름·소모품 비용'을 선택했으며 필름 구성 방안을 검토한다.",
+        "합성 설문에서 '개선할 점 없음'을 고른 응답은 26건이다.",  # 라벨 속 '개선'은 검사에서 뺀다
+        "합성 설문에서 33%가 '필름·소모품 비용'을 골랐다. ".strip(),
+    ],
+)
+def test_sentences_that_state_the_observation_with_the_label_pass(sentence):
+    rows = ["survey:q08:5"] if "26건" in sentence else ["survey:q08:1"]
+    assert check(sentence, rows) is None
+
+
+def test_change_word_not_directly_after_a_number_is_allowed():
+    # 숫자 뒤에 바로 오지 않으면(조사가 끼면) 막지 않는다
+    assert check("합성 설문에서 응답자의 33%가 필름·소모품 비용을 선택했고 개선 방안을 검토한다.", ["survey:q08:1"]) is None
+
+
+EXPECTED_FINGERPRINT = "725fbb6220faab21f290a37529c0a88c24d2d0be57ba3c7256147ce9b5b9dc03"

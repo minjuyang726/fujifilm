@@ -3,7 +3,7 @@
 제외 사유는 세 가지다(plan.md Phase 5, counters 이름):
 - dropped_no_evidence: row_ids가 비었거나 표에 없는 row_id가 있거나, 행들의 근거 합집합이 비어 있다(FR-2.4).
 - dropped_number_mismatch: 문장 속 숫자가 참조한 행의 값과 일치하지 않거나, 한글 수량 표현(절반, 두 배, 세 건 등)이 있다(FR-0.3).
-- dropped_other: 길이 초과, 한 문장이 아님, 합성 표기 누락, 표본 표기 누락, 중복, 문장 개수 초과.
+- dropped_other: 길이 초과, 한 문장이 아님, 합성 표기 누락, 표본 표기 누락, 숫자 뒤의 변화 표현(33% 개선 등), 인과 연결(이므로, 때문에 등), 중복, 문장 개수 초과.
 숫자 비교 규칙(결정 2026-11-03): 문장의 아라비아 숫자를 모두 뽑아 참조한 행의 지표 값과 비교한다. 쓴 소수 자리(0~2)로
 반올림한 값이 일치하면 통과한다(예: 비율 48.96은 49, 49.0, 48.96 모두 통과). 문항·선택지 라벨, 회차 이름, 제품군 이름, 문항 코드 속 숫자는
 비교에서 뺀다. 결과에는 사유 코드만 담고 문장 내용은 담지 않는다.
@@ -40,6 +40,14 @@ _SINO_NUMBER = r"(?:일|이|삼|사|오|육|칠|팔|구|십|백|천|만)+"  # �
 _AFTER_UNIT = r"(?:(?![가-힣])|(?=[이가을를은는의도만씩으과와에인다로라였입]))"
 _NATIVE_QUANTITY = re.compile(rf"(?<![가-힣]){_NATIVE_NUMBER}\s*(?:문항|가지|건|명|점|개|배){_AFTER_UNIT}")
 _SINO_QUANTITY = re.compile(rf"(?<![가-힣]){_SINO_NUMBER}\s*(?:문항|퍼센트|건|명|점|개|배){_AFTER_UNIT}")
+
+# 변화·인과 표현(suggest-v3, 결정 2026-11-03). 표(스냅샷)에는 한 시점의 집계 값만 있고 시간에 따른 변화 값이나 원인 정보가 없다.
+# (1) 숫자 바로 뒤(단위 % 건 명 점 개 배 포인트 허용)에 개선|증가|감소|확대|축소|향상|상승|하락|인상|인하가 오면
+#     응답 비율(예: 개선점으로 고른 33%)을 "33% 개선"처럼 달성 목표나 변화 폭으로 읽게 하거나 표에 없는 비교를 만든다.
+# (2) 이므로|때문에|따라서|그래서|덕분에는 표에 없는 인과를 단정한다. 관찰과 제안은 따로 쓰게 한다.
+# 두 경우 모두 값이 표와 일치해도 문장의 뜻이 표에 없는 내용을 만든다. 문항·선택지 라벨 속 글자(예: "개선할 점 없음")는 검사에서 뺀다.
+_CHANGE_AFTER_NUMBER = re.compile(r"\d+(?:\.\d+)?\s*(?:%|퍼센트|건|명|점|개|배|포인트)?\s*(?:개선|증가|감소|확대|축소|향상|상승|하락|인상|인하)")
+_CAUSAL = re.compile(r"므로|때문에|따라서|그래서|덕분에")  # 므로: 이므로(사용자 목록)에 더해 했으므로, 하므로도 같은 인과 연결이라 포함했다
 
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
 _THOUSANDS = re.compile(r"(?<=\d),(?=\d{3})")
@@ -137,6 +145,8 @@ def check_sentence(
         return DROPPED_NUMBER_MISMATCH
     if not numbers_match(sentence, rows, family, round_label):
         return DROPPED_NUMBER_MISMATCH
+    if _CHANGE_AFTER_NUMBER.search(_strip_labels(sentence, labels)) or _CAUSAL.search(_strip_labels(sentence, labels)):
+        return DROPPED_OTHER
     if any(row["source"] == SYNTHETIC_WORD for row in rows) and SYNTHETIC_WORD not in sentence:
         return DROPPED_OTHER
     if any(row.get("small_sample") for row in rows) and SMALL_SAMPLE_WORD not in sentence:
