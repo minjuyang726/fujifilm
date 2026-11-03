@@ -67,7 +67,7 @@ Phase 0a에서 아래 명령을 실제로 실행해 확인했다. "확인 필요
 | backend 패키지 설치 | `pip install -r requirements.txt` (backend에서) | `requirements.txt` 작성함. 이 파일로 새로 설치하는 것은 확인 필요 |
 | backend 실행 | `uvicorn app.main:app --port 8000` (backend에서). 개발 중에는 `--reload` 추가 | `/docs`가 200으로 열리는 것을 확인함. `--reload`는 확인 필요 |
 | API 문서 화면 | `http://localhost:8000/docs` | 확인됨 |
-| backend 테스트 | `pytest` (backend에서). 설정은 `backend/pytest.ini` | 확인됨 (489개 통과, SQLite, 2026-11-03) |
+| backend 테스트 | `pytest` (backend에서). 설정은 `backend/pytest.ini` | 확인됨 (518개 통과, SQLite, 2026-11-03) |
 | Supabase 연결 확인 | `python scripts/check_db.py` (backend에서) | `DATABASE_URL`이 없을 때의 실패 메시지만 확인. 성공 경로는 사용자가 `backend/.env`를 채운 뒤 확인 필요 |
 | 마이그레이션 적용 | `alembic upgrade head` (backend에서). 설정은 `backend/alembic.ini`, `backend/migrations/` | 임시 SQLite에서 적용과 `alembic check`를 확인함(Phase 0b). Supabase 적용은 사용자가 실행한 뒤 확인 필요 |
 | frontend 패키지 설치 | `npm install` (frontend에서) | 확인됨 |
@@ -86,7 +86,7 @@ Phase 0a에서 아래 명령을 실제로 실행해 확인했다. "확인 필요
 | 규칙 민감도 | `python scripts/rule_sensitivity.py` (backend에서) | 읽기 전용(`SET TRANSACTION READ ONLY`), OpenAI 호출 없음, 저장 없음, 건수와 숫자만 출력한다. Supabase에서 실행함(2026-11-03). 결과는 `docs/rule_sensitivity.md` |
 | 가설 검증 | `python scripts/verify_hypotheses.py` (backend에서) | 읽기 전용(가설을 저장하지 않음). 규칙 결과를 SQL 재계산과 비교하고 조합별 가설 목록을 출력한다. Supabase에서 확인함(2026-11-03, 4개 조합 모두 같음) |
 | 문항 초안 비용 추정 | `python scripts/estimate_question_cost.py` (backend에서) | 읽기 전용, OpenAI 호출 없음. 계수는 가정이다. Supabase에서 실행함(2026-11-03) |
-| 문항 초안·리포트 실행과 조회 | `POST /api/rounds/{round_id}/pipeline/next-survey-draft`, `POST .../pipeline/report-assembly` (본문 `{"family_id": 정수}`), `GET /api/reports`, `GET /api/reports/{report_id}`, `GET /api/reports/{report_id}/export?format=html` | 가짜 클라이언트(pytest)로만 확인함. 실행 전에 `alembic upgrade head`(→ `c50aa015e072`)가 필요하다. `next-survey-draft`의 실제 호출에는 `backend/.env`의 `OPENAI_MODEL_QUESTION`, `OPENAI_API_KEY`, 단가 항목이 필요하다. 실제 호출은 사용자 승인 후에 한다 |
+| 문항 초안·리포트 실행과 조회 | `POST /api/rounds/{round_id}/pipeline/next-survey-draft`, `POST .../pipeline/report-assembly` (본문 `{"family_id": 정수}`), `GET /api/reports`, `GET /api/reports/{report_id}`, `GET /api/reports/{report_id}/export?format=html` | 가짜 클라이언트(pytest)로만 확인함. 실행 전에 `alembic upgrade head`(→ `c50aa015e072`, question-v4의 새 형식 저장에는 `b3defd1eaa82`)가 필요하다. `next-survey-draft`의 실제 호출에는 `backend/.env`의 `OPENAI_MODEL_QUESTION`, `OPENAI_API_KEY`, 단가 항목이 필요하다. 실제 호출은 사용자 승인 후에 한다 |
 | 광고성 판정 실행 | `POST /api/rounds/{round_id}/pipeline/ad-judgement`, `GET /api/runs/{run_id}` (`/docs` 화면에서) | 가짜 클라이언트로만 확인함. 본문의 `review_ids`는 필수이고 파일럿은 표본의 `review_ids`를 넣는다. 실제 실행에는 `backend/.env`의 `OPENAI_API_KEY`, `OPENAI_MODEL_AD`와 `round` 행 하나가 필요하다. 리뷰 데이터를 보내는 실제 호출은 prd.md Q-17-3과 G3 전에는 하지 않는다. 리뷰가 아닌 임의 문장의 시험 호출은 사용자가 허용한 횟수 안에서 예외다 |
 | n8n | 워크플로 파일은 `backend/n8n/` | 기본안(설계 제안). 실행 방법은 확인 필요 |
 

@@ -1,6 +1,7 @@
-"""호출 C 출력의 JSON 스키마(spec.md 6.2절). 문항 길이·선택지 개수·숫자 금지는 question_validators.py가 검사한다."""
+"""호출 C 출력의 JSON 스키마(question-v4). 형식·선택지·항목은 모델이 쓰지 않는다: 스키마에 없는 키(type, options, items)는 막힌다.
+문항 길이·양끝 라벨 규칙·숫자 금지는 question_validators.py가 검사한다."""
 
-SCHEMA_NAME = "next_survey_questions"
+SCHEMA_NAME = "next_survey_question_texts"
 
 QUESTION_SCHEMA = {
     "type": "object",
@@ -12,10 +13,10 @@ QUESTION_SCHEMA = {
                 "properties": {
                     "hypothesis_id": {"type": "integer"},
                     "text": {"type": "string"},
-                    "type": {"type": "string", "enum": ["scale5", "single", "multi"]},
-                    "options": {"type": ["array", "null"], "items": {"type": "string"}},
+                    "low_label": {"type": "string"},
+                    "high_label": {"type": "string"},
                 },
-                "required": ["hypothesis_id", "text", "type", "options"],
+                "required": ["hypothesis_id", "text", "low_label", "high_label"],
                 "additionalProperties": False,
             },
         }

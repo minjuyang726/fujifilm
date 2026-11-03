@@ -22,8 +22,9 @@ from app.config import VOC_SMALL_SAMPLE_THRESHOLD, get_settings  # noqa: E402
 from app.db import make_engine  # noqa: E402
 from app.llm.cost import Prices, estimate_question_cost  # noqa: E402
 from app.models import ProductFamily, Round, SurveyQuestion  # noqa: E402
+from app.services.question_step import prompts_for, survey_options  # noqa: E402
+from app.services.question_forms import decide_form  # noqa: E402
 from app.services.hypotheses import find_hypotheses, question_targets  # noqa: E402
-from app.services.question_step import prompts_for  # noqa: E402
 from app.services.snapshot import compute_snapshot  # noqa: E402
 
 logging.disable(logging.CRITICAL)
@@ -48,7 +49,12 @@ def main() -> int:
                     session, family, round_row, weight_floor=settings.ad_weight_floor, small_sample_threshold=VOC_SMALL_SAMPLE_THRESHOLD
                 )
                 types = dict(session.execute(select(SurveyQuestion.code, SurveyQuestion.type).where(SurveyQuestion.round_id == round_row.round_id)).all())
-                found = question_targets(find_hypotheses(table, types))  # R1은 호출 C 입력에서 뺀다
+                options = survey_options(session, round_row.round_id)
+                found = []
+                for item in question_targets(find_hypotheses(table, types)):  # R1은 호출 C 입력에서 뺀다
+                    spec = decide_form(item["related_row_ids"], options)  # 코드가 형식을 정한다
+                    if spec is not None:
+                        found.append({**item, "form": spec.form})
                 system_prompt, user_prompt = prompts_for([{**item, "hypothesis_id": i} for i, item in enumerate(found, start=1)])
                 estimate = estimate_question_cost(len(system_prompt), len(user_prompt), prices, len(found))
                 total_one += estimate.one_pass_usd

@@ -22,9 +22,9 @@ from app.models import PipelineRun, ProductFamily, Round
 from app.routers.pipeline import get_llm_client_factory
 from app.routers.read import TEMP_ROUND_PREFIX
 from app.schemas.pipeline import RunCreated, as_utc
-from app.services.hypotheses import question_targets
+
 from app.services.question_step import STEP_NAME as QUESTION_STEP
-from app.services.question_step import hypotheses_for, prompts_for, run_next_survey_draft, snapshot_for_report
+from app.services.question_step import prompts_for, question_inputs, run_next_survey_draft, snapshot_for_report
 from app.services.report_data import counts_for_list, latest_report
 from app.services.snapshot_step import STEP_NAME as SNAPSHOT_STEP
 from app.services.snapshot_step import run_analysis_snapshot
@@ -146,7 +146,7 @@ def run_step(
         if settings.price_input_per_m is None or settings.price_output_per_m is None:
             raise _error(500, "PRICE_NOT_CONFIGURED", "비용 가드에 필요한 단가가 설정되지 않아 호출하지 않았습니다.")
         prices = Prices(settings.price_input_per_m, settings.price_output_per_m)
-        found = question_targets(hypotheses_for(session, snapshot))
+        found = question_inputs(session, snapshot)
         system_prompt, user_prompt = prompts_for([{**item, "hypothesis_id": index} for index, item in enumerate(found, start=1)])
         estimate = estimate_question_cost(len(system_prompt), len(user_prompt), prices, len(found))
         limit = settings.question_cost_limit_usd

@@ -1,4 +1,4 @@
-"""step next-survey-draft와 report-assembly 전체 흐름(가짜 클라이언트). 실제 OpenAI는 호출하지 않고 모든 값은 가짜다."""
+"""step next-survey-draft(question-v4)와 report-assembly 전체 흐름(가짜 클라이언트). 실제 OpenAI는 호출하지 않고 모든 값은 가짜다."""
 
 import json
 
@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.llm.client import LLMResult, PermanentLLMError, TransientLLMError
 from app.llm.cost import CostGuard, Prices
 from app.main import app
-from app.models import Hypothesis, LlmCallLog, NextSurveyQuestion, PipelineRun, ProductFamily, Report
+from app.models import ActionSuggestion, Hypothesis, LlmCallLog, NextSurveyQuestion, PipelineRun, ProductFamily, Report, Round
 from app.routers.pipeline import get_llm_client_factory
 from app.routers.steps import get_question_model_provider
 from app.services import question_step
@@ -19,7 +19,7 @@ from tests.test_suggestion_step import good_response, llm_text, set_llm, snapsho
 
 
 class QuestionClient:
-    """프롬프트의 가설마다 문항 하나를 돌려주는 가짜 클라이언트. omit에 든 번호(0부터)의 가설은 빼고 답한다."""
+    """프롬프트의 가설마다 문구(text, low_label, high_label)를 돌려주는 가짜 클라이언트. omit에 든 번호(0부터)의 가설은 빼고 답한다."""
 
     def __init__(self, omit=(), mutate=None, tokens=(800, 300)):
         self.calls = []
@@ -34,13 +34,12 @@ class QuestionClient:
         for index, item in enumerate(hypotheses):
             if index in self.omit:
                 continue
-            kind = ["scale5", "single", "multi"][index % 3]
             questions.append(
                 {
                     "hypothesis_id": item["hypothesis_id"],
                     "text": f"{chr(65 + index)} 주제에 대해 어떻게 생각하시나요?",
-                    "type": kind,
-                    "options": None if kind == "scale5" else ["선택지 가", "선택지 나", "선택지 다"],
+                    "low_label": "전혀 그렇지 않음",
+                    "high_label": "매우 그러함",
                 }
             )
         if self.mutate:
@@ -67,6 +66,12 @@ def run_draft(world, family_id=1):
     return world.post(f"/api/rounds/{world.q1.round_id}/pipeline/next-survey-draft", json={"family_id": family_id})
 
 
+def drafts(world):
+    """저장된 문항을 order_no 순서로: (영역 확인 문항, 가설 문항들)."""
+    rows = world.session.scalars(select(NextSurveyQuestion).order_by(NextSurveyQuestion.order_no)).all()
+    return rows[0], rows[1:]
+
+
 def test_full_flow_saves_hypotheses_and_draft_questions(world):
     report = make_report(world)
     client = use_client(QuestionClient())
@@ -76,29 +81,78 @@ def test_full_flow_saves_hypotheses_and_draft_questions(world):
     assert body["step"] == "next-survey-draft" and body["status"] == "succeeded"
     run = world.session.get(PipelineRun, body["run_id"])
     hypotheses = world.session.scalars(select(Hypothesis).order_by(Hypothesis.hypothesis_id)).all()
-    questions = world.session.scalars(select(NextSurveyQuestion).order_by(NextSurveyQuestion.order_no)).all()
+    opportunity, questions = drafts(world)
     assert hypotheses and len(hypotheses) <= 5
     assert all(h.run_id == run.run_id and h.round_id == world.q1.round_id and h.family_id == 1 for h in hypotheses)
     assert {h.snapshot_id for h in hypotheses} == {snapshot_for_report(world.session, report).snapshot_id}
-    # 가설당 문항 1개, 모두 draft, 모두 가설과 연결, 순서는 가설 우선순위 순서
+    # 가설당 문항 1개, 모두 draft, 모두 가설과 연결, 순서는 영역 확인 문항 다음에 가설 우선순위 순서
     targets = [h for h in hypotheses if h.related_row_ids != ["voc:judged:count"]]  # R1(표본 적음)은 저장만 하고 문항을 만들지 않는다
     assert len(targets) == len(hypotheses) - 1 and len(questions) == len(targets)
-    assert all(q.status == "draft" and q.report_id == report.report_id and q.run_id == run.run_id for q in questions)
+    assert all(q.status == "draft" and q.report_id == report.report_id and q.run_id == run.run_id for q in [opportunity, *questions])
     assert [q.hypothesis_id for q in questions] == [h.hypothesis_id for h in targets]
-    assert [q.order_no for q in questions] == list(range(1, len(questions) + 1))
-    by_type = {q.type: q for q in questions}
-    assert [o["code"] for o in by_type["scale5"].options_json] == ["1", "2", "3", "4", "5"] and by_type["scale5"].options_json[0]["label"] == "1점"
-    assert [o["label"] for o in by_type["single"].options_json] == ["선택지 가", "선택지 나", "선택지 다"]
+    assert [q.order_no for q in [opportunity, *questions]] == list(range(1, len(questions) + 2))
+    # 형식과 항목은 코드가 정한다: R3는 q09 기준 scale10, R2(q10, q09)는 scale10, R2(q06)는 항목이 있는 scale10_matrix
+    assert [q.type for q in questions] == ["scale10", "scale10", "scale10", "scale10_matrix"]
+    assert all(q.options_json["kind"] == "hypothesis" and q.options_json["low_label"] == "전혀 그렇지 않음" and q.options_json["high_label"] == "매우 그러함" for q in questions)
+    assert [item["label"] for item in questions[3].options_json["items"]] == ["여행", "모임·행사", "선물", "일상 기록"]  # q06의 기타(5)는 뺀다
+    assert questions[0].options_json["items"] == []
     assert run.counters["hypotheses"] == len(hypotheses) and run.counters["accepted"] == len(questions) and run.counters["question_hypotheses"] == len(targets)
-    assert run.counters["rules"].get("R3") == 1 and run.counters["attempts"] == 1 and run.counters["llm_calls"] == 1
+    assert run.counters["rules"].get("R3") == 1 and run.counters["attempts"] == 1 and run.counters["llm_calls"] == 1 and run.counters["opportunity_question"] == 1
     assert run.counters["dropped_reasons"] == {} and run.error_code is None
     log = world.session.scalars(select(LlmCallLog).where(LlmCallLog.run_id == run.run_id)).all()
-    assert len(log) == 1 and log[0].call_type == "C" and log[0].prompt_version == "question-v3" and log[0].model_name == "fake-question-model"
-    # 호출 C에는 가설의 id·종류·진술문만 간다
+    assert len(log) == 1 and log[0].call_type == "C" and log[0].prompt_version == "question-v4" and log[0].model_name == "fake-question-model"
+    # 호출 C에는 가설의 id·종류·형식·진술문만 간다: 항목 이름과 근거는 가지 않는다
     sent = client.calls[0]["user_prompt"]
-    for forbidden in ("related_row_ids", "survey:q", "review_text", "author", "allowed_evidence"):
+    for forbidden in ("related_row_ids", "survey:q", "review_text", "author", "allowed_evidence", "items", "기타"):
         assert forbidden not in sent
-    assert json.loads(sent.split("\n", 1)[1])[0].keys() == {"hypothesis_id", "kind", "statement"}
+    assert json.loads(sent.split("\n", 1)[1])[0].keys() == {"hypothesis_id", "kind", "form", "statement"}
+    assert [x["form"] for x in json.loads(sent.split("\n", 1)[1])] == ["scale10", "scale10", "scale10", "scale10_matrix"]
+
+
+def test_the_opportunity_question_is_always_first_and_comes_from_a_code_template(world):
+    report = make_report(world)
+    client = use_client(QuestionClient())
+    run = world.session.get(PipelineRun, run_draft(world).json()["run_id"])
+    opportunity, questions = drafts(world)
+    assert opportunity.order_no == 1 and opportunity.hypothesis_id is None and opportunity.type == "scale10_matrix"
+    assert opportunity.text == "다음 영역별로 개선이 필요한 정도를 눈금에서 골라 주세요." and opportunity.status == "draft"
+    assert opportunity.options_json == {
+        "kind": "opportunity_matrix", "low_label": "전혀 필요 없음", "high_label": "매우 필요함",
+        "items": [{"code": "1", "label": "필름·소모품 비용"}, {"code": "2", "label": "현상·인화 대기"}, {"code": "3", "label": "사용법 안내"}, {"code": "4", "label": "결과물 품질"}],
+    }
+    assert opportunity.report_id == report.report_id and opportunity.run_id == run.run_id
+    assert all(q.options_json["kind"] == "hypothesis" for q in questions)
+    assert len(client.calls) == 1  # 영역 확인 문항을 위한 모델 호출은 없다
+    # 모델에 가는 가설 입력에 영역 확인 문항은 없다
+    assert len(json.loads(client.calls[0]["user_prompt"].split("\n", 1)[1])) == len(questions)
+
+
+def test_no_opportunity_question_when_the_report_has_no_action_cards(world):
+    report = make_report(world)
+    for row in world.session.scalars(select(ActionSuggestion).where(ActionSuggestion.report_id == report.report_id)):
+        row.sentence = "합성 설문에서 추천 응답이 49건이다."  # suggest-v3 형식의 문장
+    world.session.commit()
+    use_client(QuestionClient())
+    run = world.session.get(PipelineRun, run_draft(world).json()["run_id"])
+    rows = world.session.scalars(select(NextSurveyQuestion)).all()
+    assert run.counters["opportunity_question"] == 0 and rows and all(q.hypothesis_id is not None for q in rows)
+    assert [q.order_no for q in sorted(rows, key=lambda q: q.order_no)] == list(range(1, len(rows) + 1))
+
+
+def test_the_same_hypothesis_gets_the_same_form_and_items_in_every_family_and_round(world):
+    make_report(world)
+    use_client(QuestionClient())
+    run_draft(world)
+    first = [(q.type, q.options_json["items"]) for q in drafts(world)[1]]
+    # 다른 제품군·다른 회차의 스냅샷에서도 같은 가설이면 같은 형식과 항목이 나온다(설문이 제품군 공통이고 문항 정의가 회차마다 같다)
+    from app.services.question_forms import decide_form
+    from app.services.question_step import question_inputs, survey_options
+    snapshot = snapshot_via_api(world, family_id=2)
+    again = [(item["form"], item["items"]) for item in question_inputs(world.session, snapshot)]
+    assert again == first
+    q2 = world.session.scalar(select(Round).where(Round.label == "2026-Q2"))
+    assert survey_options(world.session, q2.round_id) == survey_options(world.session, world.q1.round_id)
+    assert decide_form(["survey:q06:2", "survey:q06:4"], survey_options(world.session, q2.round_id)).items == first[3][1]
 
 
 def test_step_not_ready_without_report_or_snapshot(world):
@@ -113,7 +167,6 @@ def test_zero_hypotheses_fail_without_calling_the_llm(world, monkeypatch):
     make_report(world)
     client = use_client(QuestionClient())
     monkeypatch.setattr(question_step, "hypotheses_for", lambda session, snapshot: [])
-    monkeypatch.setattr("app.routers.steps.hypotheses_for", lambda session, snapshot: [])
     body = run_draft(world).json()
     run = world.session.get(PipelineRun, body["run_id"])
     assert body["status"] == "failed" and run.error_code == "NO_HYPOTHESES" and run.counters["hypotheses"] == 0
@@ -141,7 +194,7 @@ def test_meta_word_questions_are_dropped_with_their_own_counter(world):
 
     def mutate(questions):
         questions[0]["text"] = "수집된 의견을 어떻게 보시나요?"
-        questions[1]["options"] = ["선택지 가", "표본 나"]
+        questions[1]["high_label"] = "표본이 많음"
         return questions
 
     use_client(QuestionClient(mutate=mutate))
@@ -155,9 +208,9 @@ def test_invalid_questions_are_dropped_by_category(world):
 
     def mutate(questions):
         questions[0]["text"] = "월 3회 이상 쓰시나요?"  # 숫자
-        questions[1]["options"] = ["하나"]  # 선택지 개수
+        questions[1]["low_label"] = ""  # 양끝 라벨이 비었다
         questions.append({**questions[2], "text": "같은 주제에 둘째 문항인가요?"})  # 같은 가설 둘째 문항
-        questions.append({"hypothesis_id": 999999, "text": "없는 가설인가요?", "type": "single", "options": ["가", "나"]})
+        questions.append({"hypothesis_id": 999999, "text": "없는 가설인가요?", "low_label": "아니다", "high_label": "그렇다"})
         return questions
 
     use_client(QuestionClient(mutate=mutate))
@@ -166,10 +219,32 @@ def test_invalid_questions_are_dropped_by_category(world):
     assert body["status"] == "succeeded"
     c = run.counters
     assert c["dropped_number"] == 1 and c["dropped_hypothesis"] == 2 and c["dropped_format"] == 1
-    assert c["dropped_reasons"] == {"has_number": 1, "bad_options": 1, "duplicate_hypothesis": 1, "unknown_hypothesis": 1}
+    assert c["dropped_reasons"] == {"has_number": 1, "bad_scale_label": 1, "duplicate_hypothesis": 1, "unknown_hypothesis": 1}
     assert c["accepted"] == c["question_hypotheses"] - 2 and c["proposed"] == c["question_hypotheses"] + 2
     # 문항 내용은 실행 기록에 없다
     assert "월 3회" not in json.dumps(c, ensure_ascii=False)
+
+
+def test_model_output_that_tries_to_set_the_form_or_items_is_rejected_by_the_schema(world):
+    make_report(world)
+    client = use_client(QuestionClient(mutate=lambda qs: [{**q, "type": "single", "options": ["가", "나"]} for q in qs]))
+    body = run_draft(world).json()
+    run = world.session.get(PipelineRun, body["run_id"])
+    assert body["status"] == "failed" and run.error_code == "INVALID_OUTPUT" and run.counters["attempts"] == 3 == len(client.calls)
+    assert world.session.scalars(select(NextSurveyQuestion)).all() == []  # 영역 확인 문항도 저장되지 않는다
+    assert [l.status for l in world.session.scalars(select(LlmCallLog).where(LlmCallLog.run_id == run.run_id))] == ["invalid_output"] * 3
+
+
+def test_a_question_that_lists_the_item_names_is_dropped(world):
+    make_report(world)
+
+    def mutate(questions):
+        questions[3]["text"] = "여행, 모임·행사, 선물 중 어느 때에 많이 쓰시나요?"  # q06 매트릭스 문항이 항목 이름을 나열
+        return questions
+
+    use_client(QuestionClient(mutate=mutate))
+    run = world.session.get(PipelineRun, run_draft(world).json()["run_id"])
+    assert run.counters["dropped_reasons"] == {"lists_options": 1} and run.counters["dropped_format"] == 1
 
 
 def test_zero_accepted_questions_fail_after_three_requests(world):

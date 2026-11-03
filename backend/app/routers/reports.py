@@ -62,9 +62,14 @@ class OptionOut(BaseModel):
 class QuestionOut(BaseModel):
     order_no: int
     text: str
-    type: str
-    options: list[OptionOut] | None
-    hypothesis_id: int
+    type: str  # 저장된 형식 값(scale5/single/multi 또는 scale10/scale10_matrix)
+    options: list[OptionOut] | None  # 기존 화면용. 새 형식에서는 items와 같다
+    form: str  # 정규화된 필드(두 저장 형식 공통)
+    items: list[OptionOut]
+    low_label: str | None
+    high_label: str | None
+    kind: str  # hypothesis | opportunity_matrix
+    hypothesis_id: int | None  # 영역 확인 문항은 가설이 없다
     hypothesis_kind: str
     hypothesis_statement: str
 

@@ -58,11 +58,17 @@ def test_report_has_action_plan_and_next_survey_together(world):
     assert plan[0]["evidence_count"]["survey"] > 0 and plan[3]["evidence_count"]["review"] > 0
     survey = body["next_survey"]
     assert survey["status"] == "draft" and survey["run_id"] and survey["questions"]
-    question = survey["questions"][0]
-    assert set(question) == {"order_no", "text", "type", "options", "hypothesis_id", "hypothesis_kind", "hypothesis_statement"}
+    opportunity, question = survey["questions"][0], survey["questions"][1]
+    fields = {"order_no", "text", "type", "options", "form", "items", "low_label", "high_label", "kind", "hypothesis_id", "hypothesis_kind", "hypothesis_statement"}
+    assert set(opportunity) == fields and set(question) == fields
+    # 영역 확인 문항(코드 템플릿)은 맨 앞이고 가설이 없다
+    assert opportunity["order_no"] == 1 and opportunity["kind"] == "opportunity_matrix" and opportunity["hypothesis_id"] is None
+    assert opportunity["form"] == "scale10_matrix" and [i["label"] for i in opportunity["items"]] == ["필름·소모품 비용", "현상·인화 대기", "사용법 안내", "결과물 품질"]
+    assert (opportunity["low_label"], opportunity["high_label"]) == ("전혀 필요 없음", "매우 필요함") and opportunity["options"] == opportunity["items"]
     hypothesis = world.session.get(Hypothesis, question["hypothesis_id"])
     assert hypothesis.kind == question["hypothesis_kind"] and hypothesis.statement == question["hypothesis_statement"]
-    assert {q["type"] for q in survey["questions"]} <= {"scale5", "single", "multi"}
+    assert question["kind"] == "hypothesis" and (question["low_label"], question["high_label"]) == ("전혀 그렇지 않음", "매우 그러함")
+    assert {q["type"] for q in survey["questions"]} <= {"scale10", "scale10_matrix"} and all(q["form"] == q["type"] for q in survey["questions"])
     # R1(표본 적음)은 문항이 없고 별도 목록에 표시 문구와 함께 나온다
     assert [(n["kind"], n["note"]) for n in survey["no_question_hypotheses"]] == [("uncertain", "표본 적음 — 데이터 보강 필요(문항 없음)")]
     assert "표본이 적어" in survey["no_question_hypotheses"][0]["statement"]
@@ -76,7 +82,37 @@ def test_report_shows_only_the_latest_draft_run(world):
     second_run = run_draft(world).json()["run_id"]
     latest = world.get(f"/api/reports/{report.report_id}").json()["next_survey"]
     assert latest["run_id"] == second_run != first["run_id"]
-    assert all(q["text"] == "두 번째 초안의 문항인가요?" for q in latest["questions"])
+    assert all(q["text"] == "두 번째 초안의 문항인가요?" for q in latest["questions"] if q["kind"] == "hypothesis")
+    assert latest["questions"][0]["kind"] == "opportunity_matrix"  # 영역 확인 문항은 실행마다 맨 앞에 다시 들어간다
+
+
+def test_report_reads_question_v3_list_rows_and_question_v4_object_rows_together(world):
+    report = make_report(world)
+    hypothesis = Hypothesis(snapshot_id=1, round_id=world.q1.round_id, family_id=1, run_id=None, kind="uncertain", statement="진술문", related_row_ids=["survey:q06:2"])
+    world.session.add(hypothesis)
+    world.session.flush()
+    legacy_options = [{"code": "1", "label": "여행"}, {"code": "2", "label": "모임"}]
+    world.session.add_all([
+        NextSurveyQuestion(report_id=report.report_id, hypothesis_id=hypothesis.hypothesis_id, run_id=77, order_no=1, text="예전 문항인가요?",
+                           type="single", options_json=legacy_options, status="draft"),  # question-v3: 목록
+        NextSurveyQuestion(report_id=report.report_id, hypothesis_id=hypothesis.hypothesis_id, run_id=77, order_no=2, text="예전 척도 문항인가요?",
+                           type="scale5", options_json=[{"code": str(i), "label": f"{i}점"} for i in range(1, 6)], status="draft"),
+        NextSurveyQuestion(report_id=report.report_id, hypothesis_id=hypothesis.hypothesis_id, run_id=77, order_no=3, text="새 문항인가요?", type="scale10_matrix",
+                           options_json={"kind": "hypothesis", "low_label": "낮음", "high_label": "높음", "items": legacy_options}, status="draft"),  # question-v4: 객체
+        NextSurveyQuestion(report_id=report.report_id, hypothesis_id=None, run_id=77, order_no=4, text="눈금 하나인가요?", type="scale10",
+                           options_json={"kind": "hypothesis", "low_label": "낮음", "high_label": "높음", "items": []}, status="draft"),
+    ])
+    world.session.commit()
+    questions = world.get(f"/api/reports/{report.report_id}").json()["next_survey"]["questions"]
+    legacy, scale5, matrix, bar = questions
+    assert (legacy["form"], legacy["items"], legacy["low_label"], legacy["high_label"], legacy["kind"]) == ("single", legacy_options, None, None, "hypothesis")
+    assert legacy["options"] == legacy_options and legacy["type"] == "single"  # 기존 필드는 그대로다
+    assert scale5["form"] == "scale5" and len(scale5["items"]) == 5 and scale5["low_label"] is None
+    assert (matrix["form"], matrix["items"], matrix["low_label"], matrix["high_label"]) == ("scale10_matrix", legacy_options, "낮음", "높음")
+    assert matrix["options"] == legacy_options
+    assert bar["form"] == "scale10" and bar["items"] == [] and bar["hypothesis_id"] is None and bar["hypothesis_kind"] == "opportunity"
+    document = world.get(f"/api/reports/{report.report_id}/export?format=html")
+    assert document.status_code == 200 and "눈금 하나인가요?" in document.text and "예전 문항인가요?" in document.text  # 내보내기 입력도 두 형식을 읽는다
 
 
 def test_report_without_a_draft_has_an_empty_question_list(world):

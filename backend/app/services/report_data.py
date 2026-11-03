@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models import ActionSuggestion, AnalysisSnapshot, Hypothesis, NextSurveyQuestion, ProductFamily, Report, Round
 from app.services.evidence import evidence_counts
+from app.services.question_forms import OPPORTUNITY_HYPOTHESIS_KIND, OPPORTUNITY_STATEMENT, normalize_question
 from app.services.hypotheses import SMALL_SAMPLE_ROW_IDS
 
 
@@ -88,20 +89,26 @@ def build_report(session: Session, report_id: int) -> dict | None:
     if run_id is not None:
         rows = session.execute(
             select(NextSurveyQuestion, Hypothesis)
-            .join(Hypothesis, Hypothesis.hypothesis_id == NextSurveyQuestion.hypothesis_id)
+            .outerjoin(Hypothesis, Hypothesis.hypothesis_id == NextSurveyQuestion.hypothesis_id)  # 영역 확인 문항은 가설이 없다
             .where(NextSurveyQuestion.report_id == report_id, NextSurveyQuestion.run_id == run_id)
             .order_by(NextSurveyQuestion.order_no)
         ).all()
         for question, hypothesis in rows:
+            normalized = normalize_question(question.type, question.options_json)  # question-v3 이전(목록)과 question-v4(객체)를 같은 필드로 읽는다
             questions.append(
                 {
                     "order_no": question.order_no,
                     "text": question.text,
                     "type": question.type,
-                    "options": question.options_json,
-                    "hypothesis_id": hypothesis.hypothesis_id,
-                    "hypothesis_kind": hypothesis.kind,
-                    "hypothesis_statement": hypothesis.statement,
+                    "options": normalized["options"],
+                    "form": normalized["form"],
+                    "items": normalized["items"],
+                    "low_label": normalized["low_label"],
+                    "high_label": normalized["high_label"],
+                    "kind": normalized["kind"],
+                    "hypothesis_id": None if hypothesis is None else hypothesis.hypothesis_id,
+                    "hypothesis_kind": OPPORTUNITY_HYPOTHESIS_KIND if hypothesis is None else hypothesis.kind,
+                    "hypothesis_statement": OPPORTUNITY_STATEMENT if hypothesis is None else hypothesis.statement,
                 }
             )
     # 같은 실행에서 저장됐지만 문항이 없는 가설. R1(표본 적음)은 호출 C 입력에서 빼므로 항상 여기에 나온다.

@@ -1,4 +1,7 @@
-"""step next-survey-draft: 스냅샷에서 코드 규칙으로 가설을 찾고(R1~R4, LLM 미관여), 가설마다 다음 회차 문항 초안을 호출 C로 쓴다.
+"""step next-survey-draft(question-v4): 스냅샷에서 코드 규칙으로 가설을 찾고(R1~R4, LLM 미관여), 가설마다 다음 회차 문항 초안의 문구를 호출 C로 쓴다.
+
+- 문항 형식(scale10, scale10_matrix)과 항목은 코드가 가설의 출처 설문 문항에서 정한다(app/services/question_forms.py). 모델은 text, low_label, high_label만 쓴다.
+- 액션 카드가 있는 리포트에는 영역 확인 문항(kind = opportunity_matrix, 코드 템플릿, 모델 호출 없음)을 맨 앞(order_no 1)에 항상 넣는다. 이 문항은 가설이 없다(hypothesis_id NULL).
 
 - 가설이 0개이거나 문항 대상 가설(R1 제외)이 0개면 LLM을 부르지 않고 failed(NO_HYPOTHESES)로 끝낸다. 가설은 R1을 포함해 실행 기록(run_id)과 함께 저장하고 쌓는다(SQ-8).
 - 문항은 통과한 것만 해당 report에 붙이고(run_id 포함) status는 항상 draft다(FR-3.3). 최신 초안 = 가장 큰 run_id.
@@ -20,11 +23,12 @@ from app.llm.client import LLMClient, PermanentLLMError, TransientLLMError
 from app.llm.cost import CostGuard
 from app.llm.output_schemas.question import QUESTION_SCHEMA, SCHEMA_NAME
 from app.llm.prompts.question import PROMPT_VERSION, SYSTEM_PROMPT, build_user_prompt
-from app.llm.question_validators import QuestionFilterResult, filter_questions, options_json, parse_questions
+from app.llm.question_validators import QuestionFilterResult, filter_questions, parse_questions
 from app.models import (
-    AnalysisSnapshot, Hypothesis, LlmCallLog, NextSurveyQuestion, PipelineRun, ProductFamily, Report, Round, SurveyQuestion,
+    ActionSuggestion, AnalysisSnapshot, Hypothesis, LlmCallLog, NextSurveyQuestion, PipelineRun, ProductFamily, Report, Round, SurveyQuestion,
 )
 from app.services.hypotheses import find_hypotheses, question_targets
+from app.services.question_forms import KIND_HYPOTHESIS, decide_form, is_card_sentence, opportunity_question, scale_options_json
 from app.services.report_data import report_snapshot_id
 
 logger = logging.getLogger(__name__)
@@ -58,6 +62,23 @@ def question_types(session: Session, round_id: int) -> dict[str, str]:
 
 def hypotheses_for(session: Session, snapshot: AnalysisSnapshot) -> list[dict]:
     return find_hypotheses(snapshot.table_json, question_types(session, snapshot.round_id))
+
+
+def survey_options(session: Session, round_id: int) -> dict[str, list[dict]]:
+    """문항 코드 -> 보기 목록([{code, label}]). survey_question.options_json에서 읽는다."""
+    return {code: options for code, options in session.execute(select(SurveyQuestion.code, SurveyQuestion.options_json).where(SurveyQuestion.round_id == round_id))}
+
+
+def question_inputs(session: Session, snapshot: AnalysisSnapshot) -> list[dict]:
+    """호출 C 입력이 될 가설들(R1 제외). 코드가 정한 형식(form)과 항목을 붙이고, 출처 설문 문항을 못 찾은 가설은 뺀다.
+    같은 가설이면 제품군·회차와 관계없이 같은 형식과 항목이 붙는다. hypothesis_id는 호출하는 쪽이 붙인다."""
+    options = survey_options(session, snapshot.round_id)
+    inputs = []
+    for item in question_targets(hypotheses_for(session, snapshot)):
+        spec = decide_form(item["related_row_ids"], options)
+        if spec is not None:
+            inputs.append({**item, "form": spec.form, "items": spec.items})
+    return inputs
 
 
 def prompts_for(hypotheses: list[dict]) -> tuple[str, str]:
@@ -100,6 +121,7 @@ def run_next_survey_draft(
             "dropped_number": 0,
             "dropped_meta": 0,
             "dropped_reasons": {},
+            "opportunity_question": 0,
             "attempts": 0,
             "llm_calls": 0,
         }
@@ -122,7 +144,17 @@ def run_next_survey_draft(
         for row, item in zip(stored, found):
             item["hypothesis_id"] = row.hypothesis_id
         order_of = {row.hypothesis_id: index for index, row in enumerate(stored)}  # 가설 우선순위 순서로 문항 번호를 매긴다
-        targets = question_targets(found)  # R1은 저장만 하고 LLM 입력에서 뺀다
+        survey_opts = survey_options(session, round_row.round_id)
+        specs = {}  # hypothesis_id -> 코드가 정한 형식·항목
+        targets = []
+        for item in question_targets(found):  # R1은 저장만 하고 LLM 입력에서 뺀다
+            spec = decide_form(item["related_row_ids"], survey_opts)
+            if spec is None:
+                continue  # 출처 설문 문항을 못 찾은 가설은 문항을 만들지 않는다
+            item["form"] = spec.form
+            specs[item["hypothesis_id"]] = spec
+            targets.append(item)
+        counters["question_hypotheses"] = len(targets)
         if not targets:
             session.commit()
             run = session.get(PipelineRun, run_id)
@@ -132,6 +164,7 @@ def run_next_survey_draft(
             return run
         system_prompt, user_prompt = prompts_for(targets)
         ids = {item["hypothesis_id"] for item in targets}
+        item_labels = {hypothesis_id: [item["label"] for item in spec.items] for hypothesis_id, spec in specs.items()}
 
         final: QuestionFilterResult | None = None
         error_code: str | None = None
@@ -179,7 +212,7 @@ def run_next_survey_draft(
             parsed = parse_questions(result.text)
             filtered = QuestionFilterResult()
             if parsed.problem is None:
-                filtered = filter_questions(parsed.items, ids)
+                filtered = filter_questions(parsed.items, ids, item_labels)
             session.add(
                 LlmCallLog(
                     run_id=run_id, call_type=CALL_TYPE, model_name=model_name, prompt_version=PROMPT_VERSION, attempt_no=call_no,
@@ -200,11 +233,26 @@ def run_next_survey_draft(
 
         accepted = sorted(final.accepted, key=lambda item: order_of[item["hypothesis_id"]]) if final is not None else []
         if accepted:
-            for order_no, item in enumerate(accepted, start=1):
+            # 액션 카드(suggest-v4)가 있는 리포트에는 영역 확인 문항을 맨 앞에 항상 넣는다(코드 템플릿, 가설 없음).
+            has_cards = any(is_card_sentence(sentence) for sentence in session.scalars(select(ActionSuggestion.sentence).where(ActionSuggestion.report_id == report_id)))
+            template = opportunity_question(survey_opts) if has_cards else None
+            first_order = 1
+            if template is not None and template["options_json"]["items"]:
+                session.add(
+                    NextSurveyQuestion(
+                        report_id=report_id, hypothesis_id=None, run_id=run_id, order_no=1, text=template["text"], type=template["type"],
+                        options_json=template["options_json"], status="draft",
+                    )
+                )
+                counters["opportunity_question"] = 1
+                first_order = 2
+            for order_no, item in enumerate(accepted, start=first_order):
+                spec = specs[item["hypothesis_id"]]
                 session.add(
                     NextSurveyQuestion(
                         report_id=report_id, hypothesis_id=item["hypothesis_id"], run_id=run_id, order_no=order_no,
-                        text=item["text"], type=item["type"], options_json=options_json(item["type"], item["options"]), status="draft",
+                        text=item["text"], type=spec.form,
+                        options_json=scale_options_json(KIND_HYPOTHESIS, item["low_label"], item["high_label"], spec.items), status="draft",
                     )
                 )
             status, error_code = "succeeded", None
