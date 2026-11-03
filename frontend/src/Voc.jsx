@@ -7,7 +7,7 @@ const formatWeighted = (value) => value.toFixed(2)
 const formatMean = (value) => (value === null ? '–' : value.toFixed(2))
 const formatPercent = (ratio) => `${(ratio * 100).toFixed(1)}%`
 
-// 숫자 옆에 붙는 출처 표기의 기준 문구(ReviewStatsDemo와 같은 방식).
+// 숫자 옆에 붙는 출처 표기의 기준 문구.
 const BasisContext = createContext('')
 
 function Num({ children, basis }) {

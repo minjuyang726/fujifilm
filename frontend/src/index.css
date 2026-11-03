@@ -110,7 +110,7 @@ code {
   background: var(--code-bg);
 }
 
-/* 포트폴리오 데모(plan.md 부록 A) */
+/* 화면 공통 스타일 */
 .demo-page {
   padding: 0 24px 32px;
   flex: 1;
@@ -136,11 +136,6 @@ code {
 .source-line {
   font-size: 14px;
   margin-bottom: 12px;
-}
-
-.table-wrap,
-.chart-wrap {
-  overflow-x: auto;
 }
 
 .stats-table {
@@ -196,34 +191,6 @@ code {
   line-height: 130%;
   color: var(--text);
   white-space: nowrap;
-}
-
-.quarter-chart {
-  width: 100%;
-  min-width: 480px;
-  height: auto;
-}
-
-.quarter-chart .bar {
-  fill: var(--accent);
-}
-
-.quarter-chart .grid {
-  stroke: var(--border);
-  stroke-width: 1;
-}
-
-.quarter-chart .axis-label,
-.quarter-chart .value-label {
-  fill: var(--text);
-  font-size: 10px;
-}
-
-.demo-footer {
-  margin-top: 32px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  font-size: 14px;
 }
 
 /* S-2 제품군 대시보드 (plan.md Phase 2) */
