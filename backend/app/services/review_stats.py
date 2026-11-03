@@ -1,4 +1,4 @@
-"""포트폴리오 데모(plan.md 부록 A, spec.md A-11)용 리뷰 집계.
+"""집계 검증용 API(plan.md 부록 A, spec.md A-11)의 리뷰 집계.
 
 - 집계는 코드가 한다(FR-0.1). LLM이나 OpenAI 호출은 없다.
 - DB에서는 product_name, rating, date, review_text를 읽는다. review_text는 "본문 있음" 판정에만 쓰고
