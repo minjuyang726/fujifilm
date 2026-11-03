@@ -16,7 +16,7 @@ NOTICE = (
     "외부 VOC 수치는 수집된 쿠팡 리뷰의 실측 집계입니다. 근거는 건수로만 적었고, 개별 근거는 시스템에서 확인합니다."
 )
 TYPE_LABEL = {"scale5": "5점 척도", "single": "하나 고르기", "multi": "여러 개 고르기"}
-KIND_LABEL = {"uncertain": "불확실 가설", "contradictory": "모순 가설"}
+KIND_LABEL = {"uncertain": "불확실 가설", "contradictory": "불일치 가설"}
 
 # 외부 참조 검사는 표준 라이브러리 HTML 파서로 태그와 속성, <style> 내용만 본다. 본문 글(이스케이프된 LLM 출력 포함)은 검사하지 않으므로
 # 글 속에 "http://"나 "src=" 같은 문자열이 있어도 내보내기가 막히지 않는다(이스케이프되어 마크업이 아니다).

@@ -5,7 +5,7 @@ from app.models.base import Base
 
 
 class Hypothesis(Base):
-    """불확실·모순 가설. 코드 규칙(R1~R4)이 스냅샷 표에서 찾고 진술문은 코드가 템플릿으로 만든다(G5, 결정 2026-11-03)."""
+    """불확실·불일치 가설(kind 값은 uncertain / contradictory). 코드 규칙(R1~R4)이 스냅샷 표에서 찾고 진술문은 코드가 템플릿으로 만든다(G5, 결정 2026-11-03)."""
 
     __tablename__ = "hypothesis"
 

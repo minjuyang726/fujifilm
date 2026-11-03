@@ -6,11 +6,12 @@ backend 폴더에서 실행한다.
 - 가설은 서비스 코드(compute_snapshot + find_hypotheses)로 메모리에서만 만들고 저장하지 않는다.
 - 비교: 규칙이 낸 (규칙, related_row_ids)와, SQL에서 직접 센 건수로 다시 계산한 규칙 결과가 같은지,
   related_row_ids가 스냅샷의 표에 실제로 있고 근거(허용 목록)가 비어 있지 않은지.
-- 제품군 x 회차 모든 조합의 가설 목록(규칙, 종류, 진술문, related_row_ids)과 R2에 걸린 문항(유형 포함)을 출력한다.
+- 제품군 x 회차 모든 조합의 가설 목록(규칙, 종류, 진술문, related_row_ids)과 R2(R2′)에 걸린 문항(유형 포함)을 출력한다.
   진술문은 집계된 수치로 코드가 만든 문장이다. 리뷰 본문과 작성자는 읽지 않는다.
 """
 
 import logging
+import math
 import sys
 from pathlib import Path
 
@@ -32,7 +33,7 @@ logging.disable(logging.CRITICAL)
 
 
 def sql_percentages(conn, label):
-    """SQL로 직접 센 {문항코드: {선택지코드: 비율(%) 소수 1자리}}와 문항 유형, 응답자 수."""
+    """SQL로 직접 센 {문항코드: {선택지코드: 비율(%) 소수 1자리}}, 문항 유형, 문항별 응답 수(선택지별 응답 수의 합)."""
     respondents = conn.execute(
         text("select count(*) from survey_response sr join round r on r.round_id = sr.round_id where r.label = :l"), {"l": label}
     ).scalar()
@@ -58,10 +59,11 @@ def sql_percentages(conn, label):
         parsed = opts if isinstance(opts, list) else _json.loads(opts)
         options[code] = [o["code"] for o in parsed]
     pct = {code: {o: round(counts.get(code, {}).get(o, 0) / respondents * 100, 1) for o in opts} for code, opts in options.items()}
-    return pct, types
+    totals = {code: sum(counts.get(code, {}).values()) for code in options}
+    return pct, types, totals
 
 
-def independent_rules(pct, types, judged, mean):
+def independent_rules(pct, types, judged, mean, totals):
     """서비스 코드와 따로 쓴 규칙. 반환은 [(규칙, related_row_ids 튜플)] 우선순위 순서."""
     sat = round(pct["q01"]["4"] + pct["q01"]["5"], 1)
     out_contra, out_r2, out_r1 = [], [], []
@@ -75,7 +77,8 @@ def independent_rules(pct, types, judged, mean):
             continue
         ranked = sorted(pct[code].items(), key=lambda kv: (-kv[1], kv[0]))
         gap = round(ranked[0][1] - ranked[1][1], 1)
-        if gap <= 5.0:
+        p1, p2 = ranked[0][1] / 100, ranked[1][1] / 100
+        if totals[code] > 0 and gap <= 1.96 * math.sqrt((p1 + p2 - (p1 - p2) ** 2) / totals[code]) * 100:  # R2′: 격차 <= 1.96 x SE
             out_r2.append((gap, code, ("R2", (f"survey:{code}:{ranked[0][0]}", f"survey:{code}:{ranked[1][0]}"))))
     out_r2.sort(key=lambda x: (x[0], x[1]))
     if judged < VOC_SMALL_SAMPLE_THRESHOLD:
@@ -97,11 +100,11 @@ def main() -> int:
                 table, evidence = compute_snapshot(
                     session, family, round_row, weight_floor=settings.ad_weight_floor, small_sample_threshold=VOC_SMALL_SAMPLE_THRESHOLD
                 )
-                pct, types = sql_percentages(conn, round_row.label)
+                pct, types, totals = sql_percentages(conn, round_row.label)
                 others = [(r.period_start, r.period_end) for r in rounds if r.round_id != round_row.round_id and r.period_start]
                 voc = sql_numbers(conn, family.family_id, round_row.period_start, round_row.period_end, others, settings.ad_weight_floor)
                 found = h.find_hypotheses(table, types)
-                mine = independent_rules(pct, types, voc["judged"], voc["mean"])
+                mine = independent_rules(pct, types, voc["judged"], voc["mean"], totals)
                 got = [(x["rule"], tuple(x["related_row_ids"])) for x in found]
                 rows = {r["row_id"] for r in table["rows"]}
                 problems = []

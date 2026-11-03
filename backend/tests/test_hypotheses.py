@@ -14,15 +14,15 @@ Q = {
 TYPES = {"q01": "scale5", "q03": "scale5", "q06": "single", "q08": "multi", "q09": "single"}
 
 
-def make_table(percentages: dict, judged_n=4, mean=4.5, small=True):
-    """percentages: {문항코드: [선택지별 비율(%)]}. 나머지 문항은 균등하지 않은 값으로 채운다."""
-    rows = [{"row_id": "survey:respondents", "group": "설문", "source": "합성", "item": "설문 응답자 수", "metrics": {"응답자 수": 100}, "small_sample": False}]
+def make_table(percentages: dict, judged_n=4, mean=4.5, small=True, n=100):
+    """percentages: {문항코드: [선택지별 비율(%)]}. 나머지 문항은 균등하지 않은 값으로 채운다. n은 응답자 수이고 응답 수는 비율 x n / 100이다."""
+    rows = [{"row_id": "survey:respondents", "group": "설문", "source": "합성", "item": "설문 응답자 수", "metrics": {"응답자 수": n}, "small_sample": False}]
     for code, (text, labels) in Q.items():
         values = percentages.get(code) or [round(100 / len(labels) + (i * 7 - 10), 1) for i in range(len(labels))]
         for index, (label, pct) in enumerate(zip(labels, values), start=1):
             rows.append(
                 {"row_id": f"survey:{code}:{index}", "group": "설문", "source": "합성", "item": f"{text} — {label}",
-                 "metrics": {"응답 수": int(pct), "비율(%)": pct, "선택지 번호": index}, "small_sample": False}
+                 "metrics": {"응답 수": round(pct * n / 100), "비율(%)": pct, "선택지 번호": index}, "small_sample": False}
             )
     rows.append({"row_id": "voc:judged:count", "group": "VOC", "source": "실측", "item": "판정 묶음",
                  "metrics": {"건수": judged_n, "표본 적음 기준(건)": 30}, "small_sample": small})
@@ -32,8 +32,8 @@ def make_table(percentages: dict, judged_n=4, mean=4.5, small=True):
     return {"family": "가", "round": "2026-Q1", "rows": rows}
 
 
-# 선택지 비율이 서로 충분히 달라서 R2가 걸리지 않는 기본값
-SPREAD = {"q06": [40.0, 30.0, 15.0, 10.0, 5.0], "q09": [70.0, 30.0], "q01": [2.0, 4.0, 20.0, 40.0, 34.0]}
+# 선택지 비율이 서로 충분히 달라서 R2(R2′)가 걸리지 않는 기본값(n=100에서 q06 격차 40%p, q09 격차 40%p)
+SPREAD = {"q06": [60.0, 20.0, 10.0, 5.0, 5.0], "q09": [70.0, 30.0], "q01": [2.0, 4.0, 20.0, 40.0, 34.0]}
 
 
 def find(table, types=TYPES):
@@ -56,12 +56,45 @@ def test_r1_not_triggered_when_not_a_small_sample():
     assert "R1" not in rules(find(make_table(SPREAD, judged_n=30, small=False)))
 
 
-# ---------- R2 ----------
-def test_r2_gap_at_the_threshold_triggers_and_just_above_does_not():
-    at = find(make_table({**SPREAD, "q06": [30.0, 25.0, 20.0, 15.0, 10.0]}))  # 차이 5.0
-    assert "R2" in rules(at)
-    above = find(make_table({**SPREAD, "q06": [30.0, 24.9, 20.0, 15.1, 10.0]}))  # 차이 5.1
+# ---------- R2′ ----------
+# 격차 <= 1.96 x SE, SE = sqrt((p1 + p2 - (p1 - p2)^2) / n). n = 100에서 손으로 계산한 임계(%p):
+#   (32, 19): SE 계산 임계 13.763 -> 격차 13 걸림 / (32, 18): 임계 13.585 -> 격차 14 안 걸림
+def test_r2_prime_gap_just_below_and_just_above_the_critical_value():
+    below = find(make_table({**SPREAD, "q06": [32.0, 19.0, 19.0, 15.0, 15.0]}))  # 격차 13.0 <= 13.763
+    assert "R2" in rules(below)
+    above = find(make_table({**SPREAD, "q06": [32.0, 18.0, 17.0, 17.0, 16.0]}))  # 격차 14.0 > 13.585
     assert "R2" not in rules(above)
+
+
+def test_r2_prime_boundary_is_inclusive(monkeypatch):
+    monkeypatch.setattr(h, "R2_Z", 0.0)  # 임계 0 -> 격차 0(공동 1위)만 경계에서 걸린다
+    tie = find(make_table({**SPREAD, "q06": [30.0, 30.0, 20.0, 10.0, 10.0]}))
+    assert "R2" in rules(tie)
+    one_point = find(make_table({**SPREAD, "q06": [30.0, 29.0, 21.0, 10.0, 10.0]}))
+    assert "R2" not in rules(one_point)
+
+
+def test_r2_prime_critical_value_matches_the_formula():
+    gap, critical, uncertain = h.r2_test(32.0, 19.0, 100)
+    assert gap == 13.0 and uncertain
+    assert critical == pytest.approx(1.96 * ((0.32 + 0.19 - 0.13 ** 2) / 100) ** 0.5 * 100)
+    assert critical == pytest.approx(13.7633, abs=1e-3)
+
+
+def test_r2_prime_depends_on_the_number_of_responses():
+    same_percentages = {**SPREAD, "q06": [30.0, 25.0, 20.0, 15.0, 10.0]}  # 격차 5.0
+    assert "R2" in rules(find(make_table(same_percentages, n=100)))  # 임계 14.5
+    assert "R2" not in rules(find(make_table(same_percentages, n=1000)))  # 임계 4.59 -> 같은 비율이라도 응답이 많으면 안 걸린다
+
+
+def test_r2_prime_still_catches_what_the_old_fixed_gap_caught():
+    for gap_case in ([30.0, 25.0, 20.0, 15.0, 10.0], [30.0, 28.0, 20.0, 12.0, 10.0], [30.0, 30.0, 20.0, 10.0, 10.0]):  # 격차 5.0, 2.0, 0.0
+        assert "R2" in rules(find(make_table({**SPREAD, "q06": gap_case})))
+
+
+def test_r2_prime_catches_gaps_larger_than_the_old_five_points():
+    # 격차 10.0%p: 이전 고정 기준(5%p)은 놓치고 R2′(임계 13.72)는 잡는다
+    assert "R2" in rules(find(make_table({**SPREAD, "q06": [30.0, 20.0, 20.0, 15.0, 15.0]})))
 
 
 def test_r2_only_looks_at_single_questions():

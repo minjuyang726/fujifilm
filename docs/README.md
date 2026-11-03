@@ -10,6 +10,7 @@
 | [spec.md](spec.md) | 기술 명세. 요구사항의 근거는 prd.md이고, 확인이 필요한 항목은 문서 안에 SQ 번호로 모아 둠 |
 | [plan.md](plan.md) | 구현 계획. Phase별로 무엇을 만들고 어떻게 확인하는지를 적었고 코드는 없음. 범위의 근거는 mvp.md, 요구사항은 prd.md, 구현 계약은 spec.md |
 | [data_quality.md](data_quality.md) | 데이터 품질 점검. 적재 리뷰와 회차 집계 대상의 구분, 무결성 결과, 표본 크기, 합성 설문 구조, 수집 기록(미확인 항목 포함), 월·분기별 건수 |
+| [rule_sensitivity.md](rule_sensitivity.md) | 가설 규칙(R1~R4) 정의와 임계값 민감도. 조합별로 걸리는 가설 수, R2′ 문항별 값, 영향과 한계 |
 | [sql_crosscheck.md](sql_crosscheck.md) | SQL 교차검증(plan.md 부록 B). 부록 A 데모(`GET /api/demo/review-stats`)가 파이썬으로 센 집계를 SQL로 다시 세어 건수 단위로 대조한 기록 |
 
 문서 사이의 근거 관계는 각 문서 첫머리에 적힌 대로입니다: mvp.md ← service-definition.md, prd.md ← mvp.md, spec.md ← prd.md, plan.md ← mvp.md·prd.md·spec.md. 문서를 읽는 순서는 문서 안에 적혀 있지 않아 이 색인에서도 정하지 않았습니다.

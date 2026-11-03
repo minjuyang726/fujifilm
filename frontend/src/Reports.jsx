@@ -7,7 +7,7 @@ import { apiBaseUrl, useJson } from './api.js'
 // 설문 근거와 설문 수치에서 나온 내용에는 "합성" 라벨을 붙인다(FR-1.10, NFR-S3).
 const NOT_FOUND = '선택한 제품군 또는 회차를 찾을 수 없습니다. 목록을 새로 고쳐 주세요.'
 const TYPE_LABEL = { scale5: '5점 척도', single: '하나 고르기', multi: '여러 개 고르기' }
-const KIND_LABEL = { uncertain: '불확실 가설', contradictory: '모순 가설' }
+const KIND_LABEL = { uncertain: '불확실 가설', contradictory: '불일치 가설' }
 
 function SyntheticBadge() {
   return <span className="badge badge-synthetic">합성</span>

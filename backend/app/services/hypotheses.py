@@ -1,21 +1,27 @@
-"""불확실·모순 가설 찾기(G5, 결정 2026-11-03). 코드 규칙만 쓰고 LLM은 관여하지 않는다(FR-0.1).
+"""불확실·불일치 가설 찾기(G5, 결정 2026-11-03). 코드 규칙만 쓰고 LLM은 관여하지 않는다(FR-0.1).
 
 입력은 스냅샷의 표(table_json)와 문항 유형이다(유형은 표에 없어서 survey_question에서 읽어 넘긴다). 진술문은 코드가 템플릿으로 만들고
 related_row_ids를 붙인다. 설문 행에 기반한 진술문에는 "합성", 표본 적음에 기반한 진술문에는 "표본"이 들어간다.
 
 규칙과 임계값은 모두 근거 없는 임시 가정이다(Q-7처럼 이 데이터로 검증하지 않았다).
 - R1 uncertain: 판정 묶음의 n이 표본 적음 기준(app/config.py VOC_SMALL_SAMPLE_THRESHOLD, 표의 `small_sample`과 `표본 적음 기준(건)`으로 읽는다) 미만이다.
-- R2 uncertain: single 유형 문항에서 1위와 2위 선택지의 비율 차이가 R2_MAX_GAP_PP 이하다.
+- R2 uncertain(R2′, 결정 2026-11-03, 사용자): single 유형 문항의 1위·2위 선택지 비율 p1, p2와 문항 응답 수 n에 대해
+  격차 |p1 - p2| <= R2_Z x SE 이면 불확실하다(경계 포함). SE = sqrt((p1 + p2 - (p1 - p2)^2) / n).
+  한계: 다항분포에서 같은 응답자의 두 비율 차이에 대한 근사이며, 1·2위를 데이터를 본 뒤에 고르고 4개 문항을
+  보정 없이 검정하므로 불확실성 판단은 관대할 수 있다. R2_Z = 1.96도 근거 없는 임시 가정으로 둔다.
   scale5는 점수형이라 인접 점수가 경쟁하는 선택지가 아니고, multi는 비율의 합이 100%를 넘어 순위 비교가 맞지 않아 뺀다.
-- R3 contradictory: 전반 만족도(q01)의 4·5점 비율 합 >= R3_SATISFACTION_MIN 이고 추천 경험(q09)의 "아니오" 비율 >= R3_NOT_RECOMMEND_MIN.
-- R4 contradictory: q01의 4·5점 비율 합(만족)이 R4_SATISFACTION_HIGH 이상인데 VOC 판정 묶음의 비가중 평균 평점이 R4_VOC_MEAN_LOW 이하이거나,
+- R3 contradictory(화면 표시 이름은 "불일치", kind 값은 그대로): 전반 만족도(q01)의 4·5점 비율 합 >= R3_SATISFACTION_MIN 이고
+  추천 경험(q09)의 "아니오" 비율 >= R3_NOT_RECOMMEND_MIN. 서로 다른 문항의 집계 비율을 나란히 놓은 것이며 같은 응답자의 모순을 뜻하지 않는다.
+- R4 contradictory(표시 이름 "불일치"): q01의 4·5점 비율 합(만족)이 R4_SATISFACTION_HIGH 이상인데 VOC 판정 묶음의 비가중 평균 평점이 R4_VOC_MEAN_LOW 이하이거나,
   만족이 R4_SATISFACTION_LOW 미만인데 평균 평점이 R4_VOC_MEAN_HIGH 이상이다(판정이 1건 이상일 때만). 현재 데이터에서는 해당 없다.
-우선순위: contradictory(R3, R4) > R2(차이가 작은 순) > R1. 최대 MAX_HYPOTHESES개.
+우선순위: contradictory(불일치, R3·R4) > R2(차이가 작은 순) > R1. 최대 MAX_HYPOTHESES개.
 R3·R4의 q01, q09는 합성 설문의 문항 코드다(app/services/synthetic_survey.py).
 """
 
+import math
+
 MAX_HYPOTHESES = 5
-R2_MAX_GAP_PP = 5.0
+R2_Z = 1.96  # R2′ 신뢰 수준(95%)의 z 값. 근거 없는 임시 가정
 R3_SATISFACTION_MIN = 60.0
 R3_NOT_RECOMMEND_MIN = 50.0
 R4_SATISFACTION_HIGH = 60.0
@@ -37,8 +43,17 @@ def _split_item(item: str) -> tuple[str, str]:
     return question.strip(), option.strip()
 
 
+def r2_test(first_pct: float, second_pct: float, n: int) -> tuple[float, float, bool]:
+    """R2′ 검정. (격차 %p, 임계 R2_Z x SE %p, 불확실 여부)를 돌려준다. 격차는 소수 1자리로 반올림한 값이고 경계는 포함한다."""
+    p1, p2 = first_pct / 100, second_pct / 100
+    standard_error = math.sqrt(max(p1 + p2 - (p1 - p2) ** 2, 0.0) / n)
+    gap = round(first_pct - second_pct, 1)
+    critical = R2_Z * standard_error * 100
+    return gap, critical, gap <= critical
+
+
 def _survey_options(rows_by_id: dict) -> dict[str, list[dict]]:
-    """문항 코드 -> 선택지 행 목록. 각 원소는 {code, option, question_text, pct, row_id}."""
+    """문항 코드 -> 선택지 행 목록. 각 원소는 {code, option, question_text, pct, count, row_id}."""
     grouped: dict[str, list[dict]] = {}
     for row_id, row in rows_by_id.items():
         parts = row_id.split(":")
@@ -46,7 +61,7 @@ def _survey_options(rows_by_id: dict) -> dict[str, list[dict]]:
             continue
         question_text, option = _split_item(row["item"])
         grouped.setdefault(parts[1], []).append(
-            {"code": parts[2], "option": option, "question_text": question_text, "pct": row["metrics"]["비율(%)"], "row_id": row_id}
+            {"code": parts[2], "option": option, "question_text": question_text, "pct": row["metrics"]["비율(%)"], "count": row["metrics"]["응답 수"], "row_id": row_id}
         )
     return grouped
 
@@ -117,8 +132,11 @@ def find_hypotheses(table: dict, question_types: dict[str, str]) -> list[dict]:
         if len(ranked) < 2:
             continue
         first, second = ranked[0], ranked[1]
-        gap = round(first["pct"] - second["pct"], 1)
-        if gap <= R2_MAX_GAP_PP:
+        n = sum(o["count"] for o in options[code])  # single은 응답자마다 하나를 고르므로 문항 응답 수다
+        if n <= 0:
+            continue
+        gap, _critical, uncertain = r2_test(first["pct"], second["pct"], n)
+        if uncertain:
             uncertain_r2.append(
                 (
                     gap,
