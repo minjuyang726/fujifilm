@@ -85,18 +85,21 @@ def test_full_flow_saves_hypotheses_and_draft_questions(world):
     assert hypotheses and len(hypotheses) <= 5
     assert all(h.run_id == run.run_id and h.round_id == world.q1.round_id and h.family_id == 1 for h in hypotheses)
     assert {h.snapshot_id for h in hypotheses} == {snapshot_for_report(world.session, report).snapshot_id}
-    # 가설당 문항 1개, 모두 draft, 모두 가설과 연결, 순서는 영역 확인 문항 다음에 가설 우선순위 순서
+    # 같은 원문항에서 나온 가설은 한 문항이다: R3(q01×q09)와 R2(q09)가 q09 문항 하나로 합쳐진다. 저장 순서: R3, R2(q10), R2(q09), R2(q06), R1
     targets = [h for h in hypotheses if h.related_row_ids != ["voc:judged:count"]]  # R1(표본 적음)은 저장만 하고 문항을 만들지 않는다
-    assert len(targets) == len(hypotheses) - 1 and len(questions) == len(targets)
+    r3, r2_q10, r2_q09, r2_q06 = targets
+    assert len(targets) == len(hypotheses) - 1 == 4 and len(questions) == 3
     assert all(q.status == "draft" and q.report_id == report.report_id and q.run_id == run.run_id for q in [opportunity, *questions])
-    assert [q.hypothesis_id for q in questions] == [h.hypothesis_id for h in targets]
+    assert [q.hypothesis_id for q in questions] == [r3.hypothesis_id, r2_q10.hypothesis_id, r2_q06.hypothesis_id]  # 합쳐진 문항은 대표 가설(R3)에 연결된다
+    assert questions[0].options_json["merged_hypothesis_ids"] == [r2_q09.hypothesis_id] and "merged_hypothesis_ids" not in questions[1].options_json
     assert [q.order_no for q in [opportunity, *questions]] == list(range(1, len(questions) + 2))
-    # 형식과 항목은 코드가 정한다: R3는 q09 기준 scale10, R2(q10, q09)는 scale10, R2(q06)는 항목이 있는 scale10_matrix
-    assert [q.type for q in questions] == ["scale10", "scale10", "scale10", "scale10_matrix"]
+    # 형식과 항목은 코드가 정한다: q09 문항(R3+R2)은 scale10, q10 문항은 scale10, q06 문항은 항목이 있는 scale10_matrix
+    assert [q.type for q in questions] == ["scale10", "scale10", "scale10_matrix"]
     assert all(q.options_json["kind"] == "hypothesis" and q.options_json["low_label"] == "전혀 그렇지 않음" and q.options_json["high_label"] == "매우 그러함" for q in questions)
-    assert [item["label"] for item in questions[3].options_json["items"]] == ["여행", "모임·행사", "선물", "일상 기록"]  # q06의 기타(5)는 뺀다
+    assert [item["label"] for item in questions[2].options_json["items"]] == ["여행", "모임·행사", "선물", "일상 기록"]  # q06의 기타(5)는 뺀다
     assert questions[0].options_json["items"] == []
-    assert run.counters["hypotheses"] == len(hypotheses) and run.counters["accepted"] == len(questions) and run.counters["question_hypotheses"] == len(targets)
+    assert run.counters["hypotheses"] == len(hypotheses) and run.counters["accepted"] == len(questions) == 3
+    assert run.counters["question_hypotheses"] == 3 and run.counters["merged_hypotheses"] == 1
     assert run.counters["rules"].get("R3") == 1 and run.counters["attempts"] == 1 and run.counters["llm_calls"] == 1 and run.counters["opportunity_question"] == 1
     assert run.counters["dropped_reasons"] == {} and run.error_code is None
     log = world.session.scalars(select(LlmCallLog).where(LlmCallLog.run_id == run.run_id)).all()
@@ -106,7 +109,8 @@ def test_full_flow_saves_hypotheses_and_draft_questions(world):
     for forbidden in ("related_row_ids", "survey:q", "review_text", "author", "allowed_evidence", "items", "기타"):
         assert forbidden not in sent
     assert json.loads(sent.split("\n", 1)[1])[0].keys() == {"hypothesis_id", "kind", "form", "statement"}
-    assert [x["form"] for x in json.loads(sent.split("\n", 1)[1])] == ["scale10", "scale10", "scale10", "scale10_matrix"]
+    inputs = json.loads(sent.split("\n", 1)[1])
+    assert [x["form"] for x in inputs] == ["scale10", "scale10", "scale10_matrix"] and inputs[0]["kind"] == "contradictory"  # 합친 문항은 불일치로 보낸다
 
 
 def test_the_opportunity_question_is_always_first_and_comes_from_a_code_template(world):
@@ -152,7 +156,7 @@ def test_the_same_hypothesis_gets_the_same_form_and_items_in_every_family_and_ro
     assert again == first
     q2 = world.session.scalar(select(Round).where(Round.label == "2026-Q2"))
     assert survey_options(world.session, q2.round_id) == survey_options(world.session, world.q1.round_id)
-    assert decide_form(["survey:q06:2", "survey:q06:4"], survey_options(world.session, q2.round_id)).items == first[3][1]
+    assert decide_form(["survey:q06:2", "survey:q06:4"], survey_options(world.session, q2.round_id)).items == first[2][1]
 
 
 def test_step_not_ready_without_report_or_snapshot(world):
@@ -223,6 +227,11 @@ def test_invalid_questions_are_dropped_by_category(world):
     assert c["accepted"] == c["question_hypotheses"] - 2 and c["proposed"] == c["question_hypotheses"] + 2
     # 문항 내용은 실행 기록에 없다
     assert "월 3회" not in json.dumps(c, ensure_ascii=False)
+    # 시도마다 거부 사유가 코드 값으로 호출 기록에 남는다(내용은 남지 않는다)
+    log = world.session.scalars(select(LlmCallLog).where(LlmCallLog.run_id == run.run_id)).all()
+    assert len(log) == 1 and log[0].status == "ok"
+    assert log[0].error_code == "dropped_hypothesis=2;dropped_format=1;dropped_number=1;has_number=1;bad_scale_label=1;duplicate_hypothesis=1;unknown_hypothesis=1"
+    assert "월 3회" not in log[0].error_code
 
 
 def test_model_output_that_tries_to_set_the_form_or_items_is_rejected_by_the_schema(world):
@@ -239,7 +248,7 @@ def test_a_question_that_lists_the_item_names_is_dropped(world):
     make_report(world)
 
     def mutate(questions):
-        questions[3]["text"] = "여행, 모임·행사, 선물 중 어느 때에 많이 쓰시나요?"  # q06 매트릭스 문항이 항목 이름을 나열
+        questions[2]["text"] = "여행, 모임·행사, 선물 중 어느 때에 많이 쓰시나요?"  # q06 매트릭스 문항이 항목 이름을 나열
         return questions
 
     use_client(QuestionClient(mutate=mutate))
@@ -385,3 +394,39 @@ def test_report_assembly_checks_both_parts_and_only_records_a_run(world):
 def test_report_assembly_without_any_report_is_not_ready(world):
     assert world.post(f"/api/rounds/{world.q1.round_id}/pipeline/report-assembly", json={"family_id": 1}).status_code == 400
     assert world.post(f"/api/rounds/{world.q1.round_id}/pipeline/report-assembly", json={"family_id": 99}).status_code == 404
+
+
+# ---------- 같은 원문항에서 나온 가설 합치기 ----------
+def test_hypotheses_from_the_same_source_question_become_one_question_and_keep_the_contradictory_mark(world):
+    report = make_report(world)
+    use_client(QuestionClient())
+    run_draft(world)
+    hypotheses = {h.hypothesis_id: h for h in world.session.scalars(select(Hypothesis))}
+    _opportunity, questions = drafts(world)
+    q09_questions = [q for q in questions if q.options_json["items"] == [] and q.hypothesis_id in hypotheses and hypotheses[q.hypothesis_id].kind == "contradictory"]
+    assert len(q09_questions) == 1  # 추천 문항(q09)은 하나만 나온다
+    merged_ids = q09_questions[0].options_json["merged_hypothesis_ids"]
+    assert len(merged_ids) == 1 and hypotheses[merged_ids[0]].kind == "uncertain" and hypotheses[merged_ids[0]].related_row_ids[0].startswith("survey:q09")
+    # 리포트 API: 대표 가설의 불일치 표시가 남고, 진술문에 합쳐진 가설의 진술문이 이어지며, 합쳐진 가설은 '문항이 없는 가설'에 나오지 않는다
+    body = world.get(f"/api/reports/{report.report_id}").json()["next_survey"]
+    api_q = next(q for q in body["questions"] if q["hypothesis_id"] == q09_questions[0].hypothesis_id)
+    assert api_q["hypothesis_kind"] == "contradictory" and api_q["merged_hypothesis_ids"] == merged_ids
+    assert hypotheses[q09_questions[0].hypothesis_id].statement in api_q["hypothesis_statement"] and hypotheses[merged_ids[0]].statement in api_q["hypothesis_statement"]
+    assert [n["kind"] for n in body["no_question_hypotheses"]] == ["uncertain"] and "표본" in body["no_question_hypotheses"][0]["statement"]
+
+
+def test_merge_by_source_prefers_the_contradictory_hypothesis_and_keeps_priority_order():
+    from app.services.question_forms import merge_by_source
+
+    items = [
+        {"hypothesis_id": 1, "kind": "uncertain", "statement": "가", "source_question": "q10"},
+        {"hypothesis_id": 2, "kind": "uncertain", "statement": "나", "source_question": "q09"},
+        {"hypothesis_id": 3, "kind": "contradictory", "statement": "다", "source_question": "q09"},
+        {"hypothesis_id": 4, "kind": "uncertain", "statement": "라", "source_question": "q06"},
+    ]
+    merged = merge_by_source(items)
+    assert [m["source_question"] for m in merged] == ["q10", "q09", "q06"]  # 그룹의 첫 가설이 나온 순서
+    q09 = merged[1]
+    assert q09["hypothesis_id"] == 3 and q09["kind"] == "contradictory" and q09["statement"] == "다 나"  # 대표는 불일치 가설
+    assert [m["hypothesis_id"] for m in q09["merged_items"]] == [2] and merged[0]["merged_items"] == []
+    assert merge_by_source([]) == []

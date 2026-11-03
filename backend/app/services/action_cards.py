@@ -23,10 +23,20 @@ AREA_QUESTION_CODE = "q08"
 EXCLUDED_OPTION_CODES = ("5",)
 TOP_AREAS = 3
 TIE_Z = 1.96
-# q07(가장 불편했던 점)의 같은 영역 보기를 근거에 더한다. 두 문항의 라벨 문구가 달라서("사용법 안내" / "사용법") 이름이 아니라 아래 매핑으로 잇는다.
-# 합성 설문 정의(app/services/synthetic_survey.py)에서 q07과 q08의 보기 1~4가 같은 주제의 같은 순서다. 라벨이 같은 영역을 가리키는지는 테스트가 확인한다.
+# q07(가장 불편했던 점)의 같은 영역 보기를 근거에 더한다. 보기 코드 매핑으로 잇는다.
+# 합성 설문 정의(app/services/synthetic_survey.py)에서 q07과 q08의 보기 1~4가 같은 주제의 같은 순서이고, 라벨도 같다(아래 LABEL_ALIASES로 통일).
+# 같은 영역을 가리키는지는 테스트가 확인한다.
 RELATED_QUESTION_CODE = "q07"
 Q08_TO_Q07_OPTION = {"1": "1", "2": "2", "3": "3", "4": "4"}  # q08 보기 코드 -> q07 보기 코드
+
+# 같은 영역의 라벨을 하나로 통일한다. 기준은 q08의 "사용법 안내"다(q07의 "사용법"을 바꾼다).
+# 합성 설문 정의(synthetic_survey.py)는 이미 "사용법 안내"로 고쳤지만, 이미 적재된 DB의 survey_question에는 예전 라벨 "사용법"이 남아 있다.
+# 그래서 DB에서 읽은 라벨은 canonical_label로 통일해서 쓴다(영역 라벨, 문항 항목, 집계 표, 대시보드). DB를 다시 적재하면 이 매핑은 쓰이지 않는다.
+LABEL_ALIASES = {"사용법": "사용법 안내"}
+
+
+def canonical_label(label: str) -> str:
+    return LABEL_ALIASES.get(label, label)
 
 SYNTHETIC_PREFIX = "합성 설문 기준"
 REVIEW_PREFIX = "쿠팡 리뷰 기준(실측)"
@@ -146,10 +156,10 @@ def review_card(rows_by_id: dict) -> tuple[str, list[str]] | None:
         return None
     sentence = (
         f"{REVIEW_PREFIX} — 선택한 회차의 리뷰는 {total['metrics']['리뷰 수']}건이고, "
-        f"그중 제목·본문 없음이 {no_text['metrics']['건수']}건, 판정이 끝난 글이 {judged['metrics']['건수']}건이다."
+        f"그중 제목·본문 없음이 {no_text['metrics']['건수']}건, 판정이 끝난 글이 {judged['metrics']['건수']}건입니다."
     )
     if judged.get("small_sample"):
-        sentence += " 판정 표본이 적어 영역 우선순위는 설문 기준으로만 정했다."
+        sentence += " 판정 표본이 적어 영역 우선순위는 설문 기준으로만 정했습니다."
     return sentence, list(REVIEW_ROW_IDS)
 
 

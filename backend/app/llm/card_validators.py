@@ -15,11 +15,51 @@ from dataclasses import dataclass, field
 from app.llm.prompts.suggestion import (
     DELIVERABLE_KINDS, MAX_DELIVERABLE_CHARS, MAX_SENTENCE_CHARS, PLACEHOLDER_PCT, PLACEHOLDER_RANK,
 )
-from app.llm.suggestion_validators import (
-    BAD_SCHEMA, DROPPED_NO_EVIDENCE, DROPPED_NUMBER_MISMATCH, DROPPED_OTHER, NOT_JSON, _CAUSAL, _CAUSAL_AFTER_NUMBER,
-    _CHANGE_AFTER_NUMBER, _SENTENCE_END, has_korean_quantity,
-)
 from app.services.action_cards import Area, fill_placeholders
+
+# ---- 호출 B·C 검증기가 함께 쓰는 정의 (suggest-v3 검증기에서 옮겨 왔다) ----
+NOT_JSON = "not_json"
+BAD_SCHEMA = "bad_schema"
+
+DROPPED_NO_EVIDENCE = "dropped_no_evidence"
+DROPPED_NUMBER_MISMATCH = "dropped_number_mismatch"
+DROPPED_OTHER = "dropped_other"
+
+# 한글 수량 표현(FR-0.3: 서술 속 수치는 표의 값과 일치해야 하는데, 아라비아 숫자 검사만으로는 한글로 쓴 수량을 잡지 못한다).
+# 표현 목록은 사용자가 정했다(결정 2026-11-03): (1) 절반, 반절, 과반, 곱절, 몇 배, (2) 고유어 수 + 단위
+# (한|두|세|네|다섯|여섯|일곱|여덟|아홉|열 + 건|명|점|개|배|문항|가지), (3) 한자어 수 + 단위
+# (일|이|삼|사|오|육|칠|팔|구|십|백|천|만 + 건|명|점|개|배|문항|퍼센트).
+# 단위가 다른 단어의 일부일 때(만족한 건수, 점수, 개선, 배송)는 잡지 않도록 수 앞에는 한글이 없어야 하고
+# 단위 뒤에는 한글이 없거나 조사가 와야 한다. "대부분", "소수", "일부" 같은 질적 표현은 막지 않는다(수치가 아니다).
+# 알려진 한계: 지시어 "이"(이 점, 이 건)처럼 한자어 수와 같은 글자가 쓰인 정상 문장도 제외될 수 있다(사용자 목록을 그대로 따름).
+_QUANTITY_WORDS = re.compile(r"절반|반절|과반|곱절|몇\s*배")
+# 고유어 수: 사용자 목록(한~열)에 더해 열한~열아홉, 스물 이상(스무, 스물, 서른, 마흔, 쉰, 예순, 일흔, 여든, 아흔)도 같은 종류라 포함한다.
+_NATIVE_NUMBER = r"(?:(?:스무|스물|서른|마흔|쉰|예순|일흔|여든|아흔|열)?(?:다섯|여섯|일곱|여덟|아홉|한|두|세|네)|열|스무|스물|서른|마흔|쉰|예순|일흔|여든|아흔)"
+_SINO_NUMBER = r"(?:일|이|삼|사|오|육|칠|팔|구|십|백|천|만)+"  # 이십, 삼백 같은 합성 수도 잡는다
+_AFTER_UNIT = r"(?:(?![가-힣])|(?=[이가을를은는의도만씩으과와에인다로라였입]))"
+_NATIVE_QUANTITY = re.compile(rf"(?<![가-힣]){_NATIVE_NUMBER}\s*(?:문항|가지|건|명|점|개|배){_AFTER_UNIT}")
+_SINO_QUANTITY = re.compile(rf"(?<![가-힣]){_SINO_NUMBER}\s*(?:문항|퍼센트|건|명|점|개|배){_AFTER_UNIT}")
+
+# 변화·인과 표현(suggest-v3, 결정 2026-11-03). 표(스냅샷)에는 한 시점의 집계 값만 있고 시간에 따른 변화 값이나 원인 정보가 없다.
+# (1) 숫자 바로 뒤(단위 % 건 명 점 개 배 포인트 허용)에 개선|증가|감소|확대|축소|향상|상승|하락|인상|인하가 오면
+#     응답 비율(예: 개선점으로 고른 33%)을 "33% 개선"처럼 달성 목표나 변화 폭으로 읽게 하거나 표에 없는 비교를 만든다.
+# (2) 이므로|때문에|따라서|그래서|덕분에는 표에 없는 인과를 단정한다. 관찰과 제안은 따로 쓰게 한다.
+# 두 경우 모두 값이 표와 일치해도 문장의 뜻이 표에 없는 내용을 만든다. 문항·선택지 라벨 속 글자(예: "개선할 점 없음")는 검사에서 뺀다.
+_CHANGE_AFTER_NUMBER = re.compile(r"\d+(?:\.\d+)?\s*(?:%|퍼센트|건|명|점|개|배|포인트)?\s*(?:개선|증가|감소|확대|축소|향상|상승|하락|인상|인하)")
+# 숫자·단위 바로 뒤의 "여서/이어서/이라서/라서"도 같은 인과 연결이다(결정 2026-11-03). 근거: suggest-v3 통과 문장 16개 중 3개가
+# "37%여서", "71.4%여서", "100%여서"처럼 숫자 뒤에 이 연결을 썼다. 라벨 속 글자는 검사에서 뺀다. 일반 명사 뒤의 "~라서"까지 막지 않도록
+# 숫자(와 단위) 바로 뒤일 때만 잡는다.
+_CAUSAL_AFTER_NUMBER = re.compile(r"\d+(?:\.\d+)?\s*(?:%|퍼센트|건|명|점|개|배|포인트)?\s*(?:이어서|이라서|여서|라서)")
+_CAUSAL = re.compile(r"므로|때문에|따라서|그래서|덕분에")  # 므로: 이므로(사용자 목록)에 더해 했으므로, 하므로도 같은 인과 연결이라 포함했다
+
+
+_SENTENCE_END = re.compile(r"[.!?。](?:\s+|$)")
+
+
+def has_korean_quantity(sentence: str) -> bool:
+    """문장에 한글 수량 표현이 있으면 참. 라벨(문항·선택지 이름 등)에 든 글자는 미리 뺀 문장을 넘긴다."""
+    return bool(_QUANTITY_WORDS.search(sentence) or _NATIVE_QUANTITY.search(sentence) or _SINO_QUANTITY.search(sentence))
+
 
 REASON_EMPTY = "empty"
 REASON_TOO_LONG = "too_long"
@@ -35,12 +75,34 @@ REASON_BAD_KIND = "bad_deliverable_kind"
 REASON_DELIVERABLE_EMPTY = "deliverable_empty"
 REASON_DELIVERABLE_TOO_LONG = "deliverable_too_long"
 REASON_DELIVERABLE_CHANGE_OR_CAUSE = "deliverable_change_or_cause"
+REASON_DELIVERABLE_OPERATIONAL_FACT = "deliverable_operational_fact"
+REASON_FAQ_FORMAT = "faq_format"
 
 _DIGIT = re.compile(r"\d")
 # 산출물 본문의 변화·효과 표현. 숫자가 없는 글이라 "숫자 바로 뒤" 규칙(_CHANGE_AFTER_NUMBER)은 걸리지 않으므로 단어 자체를 막는다.
-# 영역 이름 속 글자(예: 개선)는 막지 않으려고 "개선"은 목록에서 뺀다.
-_CHANGE_OR_EFFECT = re.compile(r"증가|감소|확대|축소|향상|상승|하락|인상|인하|효과|해소|줄어|늘어|높아|낮아")
+# 영역 이름 속 글자(예: 개선)는 막지 않으려고 "개선"은 목록에서 뺀다. "인상"·"인하"는 "확인하"·"좋은 인상"처럼 흔한 말에 들어 있어서 뺀다(v5 초안은 "확인"을 자주 쓴다).
+_CHANGE_OR_EFFECT = re.compile(r"증가|감소|확대|축소|향상|상승|하락|효과|해소|줄어|늘어|높아|낮아")
 _BRACE = re.compile(r"[{}]")
+
+# "[확인 필요: 확인할 내용]" 칸. 운영 사실이 들어갈 자리를 비워 두는 표시이고, 칸 안의 글은 운영 사실 검사에서 뺀다.
+# 칸 안에도 숫자는 쓸 수 없다(숫자·% 검사는 본문 전체에 적용한다). "[확인 필요]"만 쓴 칸도 허용한다.
+CONFIRMATION_SLOT = re.compile(r"\[확인 필요(?::[^\]\n]*)?\]")
+
+# 운영 사실을 전제하는 표현. 에이전트는 현재 운영의 기간·결제·재고·판매 단위를 알 수 없으므로 초안이 이를 단정하면 안 된다.
+# 근거: suggest-v4 산출물을 검토한 사용자의 지적(2026-11-03)에서 나온 유형이다 - "안내되는 예상 기간", "실제 결제 금액이 일치", "재고·판매 단위".
+# 각 표현은 칸 밖에서 쓰이면 사실을 단정하는 문구가 된다. 목록은 완전하지 않으며(다른 운영 사실 표현은 프롬프트로만 막는다) 새 유형이 나오면 여기에 더한다.
+OPERATIONAL_FACT_PATTERNS = (
+    re.compile(r"안내되는\s*예상\s*기간"),
+    re.compile(r"예상\s*(?:처리\s*)?기간"),
+    re.compile(r"소요\s*(?:되는\s*)?기간"),
+    re.compile(r"실제\s*결제\s*금액"),
+    re.compile(r"결제\s*금액이\s*일치"),
+    re.compile(r"재고"),
+    re.compile(r"판매\s*단위"),
+)
+FAQ_KIND = "FAQ 초안"
+_FAQ_QUESTION = re.compile(r"(?<![A-Za-z])Q\.")  # "FAQ."의 Q.는 문답 표시가 아니다
+_FAQ_ANSWER = re.compile(r"(?<![A-Za-z])A\.")
 
 
 @dataclass
@@ -119,6 +181,11 @@ def check_card(item: dict, areas_by_code: dict[str, Area], accepted_codes: set[s
         return DROPPED_OTHER, REASON_DELIVERABLE_TOO_LONG
     if _CHANGE_OR_EFFECT.search(deliverable) or _CAUSAL.search(deliverable):
         return DROPPED_OTHER, REASON_DELIVERABLE_CHANGE_OR_CAUSE
+    outside_slots = CONFIRMATION_SLOT.sub(" ", deliverable)
+    if any(pattern.search(outside_slots) for pattern in OPERATIONAL_FACT_PATTERNS):
+        return DROPPED_OTHER, REASON_DELIVERABLE_OPERATIONAL_FACT
+    if item["deliverable_kind"] == FAQ_KIND and not (_FAQ_QUESTION.search(deliverable) and _FAQ_ANSWER.search(deliverable)):
+        return DROPPED_OTHER, REASON_FAQ_FORMAT
     return None, None
 
 

@@ -31,7 +31,7 @@ def test_r4_with_voc_rows_uses_the_q01_source():
     "question_code, expected",
     [
         ("q06", ["여행", "모임·행사", "선물", "일상 기록"]),  # 5 기타 제외
-        ("q07", ["필름·소모품 비용", "현상·인화 대기", "사용법", "결과물 품질"]),  # 5 불편한 점 없음 제외
+        ("q07", ["필름·소모품 비용", "현상·인화 대기", "사용법 안내", "결과물 품질"]),  # 5 불편한 점 없음 제외
         ("q08", ["필름·소모품 비용", "현상·인화 대기", "사용법 안내", "결과물 품질"]),  # 5 개선할 점 없음 제외
     ],
 )
@@ -103,7 +103,7 @@ def test_normalize_reads_the_question_v4_object_format():
     normalized = forms.normalize_question("scale10_matrix", stored)
     assert normalized == {
         "form": "scale10_matrix", "items": [{"code": "1", "label": "여행"}], "low_label": "전혀 아님", "high_label": "매우 그러함",
-        "kind": "hypothesis", "options": [{"code": "1", "label": "여행"}],
+        "kind": "hypothesis", "options": [{"code": "1", "label": "여행"}], "merged_hypothesis_ids": [],
     }
     single_bar = forms.normalize_question("scale10", forms.scale_options_json("hypothesis", "낮음", "높음", []))
     assert single_bar["items"] == [] and single_bar["options"] == [] and single_bar["low_label"] == "낮음"
@@ -112,10 +112,12 @@ def test_normalize_reads_the_question_v4_object_format():
 def test_normalize_reads_the_question_v3_list_format():
     stored = [{"code": "1", "label": "여행"}, {"code": "2", "label": "모임"}]
     normalized = forms.normalize_question("single", stored)
-    assert normalized == {"form": "single", "items": stored, "low_label": None, "high_label": None, "kind": "hypothesis", "options": stored}
+    assert normalized == {"form": "single", "items": stored, "low_label": None, "high_label": None, "kind": "hypothesis", "options": stored,
+                          "merged_hypothesis_ids": []}
     scale5 = forms.normalize_question("scale5", [{"code": str(i), "label": f"{i}점"} for i in range(1, 6)])
     assert scale5["form"] == "scale5" and len(scale5["items"]) == 5 and scale5["kind"] == "hypothesis"
-    assert forms.normalize_question("scale5", None) == {"form": "scale5", "items": [], "low_label": None, "high_label": None, "kind": "hypothesis", "options": None}
+    assert forms.normalize_question("scale5", None) == {"form": "scale5", "items": [], "low_label": None, "high_label": None, "kind": "hypothesis", "options": None,
+                                                         "merged_hypothesis_ids": []}
 
 
 def test_normalize_does_not_share_the_stored_objects():
@@ -130,3 +132,18 @@ def test_is_card_sentence_tells_suggest_v4_cards_from_older_sentences():
     assert forms.is_card_sentence(card)
     assert not forms.is_card_sentence("합성 설문에서 추천 응답이 49건이다.")
     assert not forms.is_card_sentence("쿠팡 리뷰 기준(실측) — 선택한 회차의 리뷰는 63건이다.")
+
+
+# ---------- 라벨 통일: q07의 "사용법"을 q08의 "사용법 안내"로 ----------
+def test_old_db_labels_are_unified_when_items_are_supplied():
+    options = survey_options()
+    options["q07"][2]["label"] = "사용법"  # 이미 적재된 DB의 예전 라벨
+    spec = forms.decide_form(["survey:q07:2", "survey:q07:3"], options)
+    assert labels(spec.items) == ["필름·소모품 비용", "현상·인화 대기", "사용법 안내", "결과물 품질"]
+    assert spec.items == forms.decide_form(["survey:q08:1", "survey:q08:3"], survey_options()).items  # q07 항목과 q08 영역 라벨이 같다
+
+
+def test_merged_hypothesis_ids_are_stored_only_when_present():
+    assert "merged_hypothesis_ids" not in forms.scale_options_json("hypothesis", "낮음", "높음", [])
+    stored = forms.scale_options_json("hypothesis", "낮음", "높음", [], [7, 9])
+    assert stored["merged_hypothesis_ids"] == [7, 9] and forms.normalize_question("scale10", stored)["merged_hypothesis_ids"] == [7, 9]

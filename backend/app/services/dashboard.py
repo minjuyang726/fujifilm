@@ -9,6 +9,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.models import SurveyAnswer, SurveyQuestion, SurveyResponse
+from app.services.action_cards import canonical_label
 
 RATIO_DIGITS = 4
 SYNTHETIC_LABEL = "합성"
@@ -43,6 +44,6 @@ def survey_section(session: Session, round_id: int) -> dict:
         for option in question.options_json:
             count = counts.get((question.question_id, option["code"]), 0)
             ratio = round(count / respondent_count, RATIO_DIGITS) if respondent_count else 0.0
-            results.append({"code": option["code"], "option": option["label"], "count": count, "ratio": ratio})
+            results.append({"code": option["code"], "option": canonical_label(option["label"]), "count": count, "ratio": ratio})
         items.append({"question_id": question.question_id, "text": question.text, "type": question.type, "results": results})
     return {"respondent_count": respondent_count, "synthetic_label": label, "scope": "common", "questions": items}

@@ -1,4 +1,7 @@
-"""호출 B 출력 검증(spec.md 6.3절 호출 B). 문장별로 검증하고, 통과하지 못한 문장은 쓰지 않는다.
+"""[이전 형식] suggest-v3 호출 B 출력 검증(spec.md 6.3절 호출 B). suggest-v4부터는 단계가 쓰지 않는다(카드 검증은 card_validators.py).
+이 모듈의 이전 단위 테스트(tests/test_suggestion_module.py)가 아직 가져다 쓴다. 한글 수량·변화·인과 정규식과 상수는 card_validators.py로 옮겼다.
+
+문장별로 검증하고, 통과하지 못한 문장은 쓰지 않는다.
 
 제외 사유는 세 가지다(plan.md Phase 5, counters 이름):
 - dropped_no_evidence: row_ids가 비었거나 표에 없는 row_id가 있거나, 행들의 근거 합집합이 비어 있다(FR-2.4).
@@ -14,14 +17,12 @@ import re
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 
+from app.llm.card_validators import (  # noqa: F401  (재사용 정의는 card_validators.py로 옮겼다. 이 모듈의 이전 테스트가 이 이름으로 가져온다)
+    _CAUSAL, _CAUSAL_AFTER_NUMBER, _CHANGE_AFTER_NUMBER, _SENTENCE_END, BAD_SCHEMA, DROPPED_NO_EVIDENCE, DROPPED_NUMBER_MISMATCH, DROPPED_OTHER,
+    NOT_JSON, has_korean_quantity,
+)
 from app.llm.prompts.suggestion import MAX_SENTENCE_CHARS, MAX_SENTENCES
 
-NOT_JSON = "not_json"
-BAD_SCHEMA = "bad_schema"
-
-DROPPED_NO_EVIDENCE = "dropped_no_evidence"
-DROPPED_NUMBER_MISMATCH = "dropped_number_mismatch"
-DROPPED_OTHER = "dropped_other"
 
 # dropped_other의 사유 코드(counters.dropped_reasons에 센다. 문장 본문은 저장하지 않는다)
 REASON_EMPTY = "empty"
@@ -38,37 +39,11 @@ REASON_OVER_LIMIT = "over_sentence_limit"
 SYNTHETIC_WORD = "합성"
 SMALL_SAMPLE_WORD = "표본"
 
-# 한글 수량 표현(FR-0.3: 서술 속 수치는 표의 값과 일치해야 하는데, 아라비아 숫자 검사만으로는 한글로 쓴 수량을 잡지 못한다).
-# 표현 목록은 사용자가 정했다(결정 2026-11-03): (1) 절반, 반절, 과반, 곱절, 몇 배, (2) 고유어 수 + 단위
-# (한|두|세|네|다섯|여섯|일곱|여덟|아홉|열 + 건|명|점|개|배|문항|가지), (3) 한자어 수 + 단위
-# (일|이|삼|사|오|육|칠|팔|구|십|백|천|만 + 건|명|점|개|배|문항|퍼센트).
-# 단위가 다른 단어의 일부일 때(만족한 건수, 점수, 개선, 배송)는 잡지 않도록 수 앞에는 한글이 없어야 하고
-# 단위 뒤에는 한글이 없거나 조사가 와야 한다. "대부분", "소수", "일부" 같은 질적 표현은 막지 않는다(수치가 아니다).
-# 알려진 한계: 지시어 "이"(이 점, 이 건)처럼 한자어 수와 같은 글자가 쓰인 정상 문장도 제외될 수 있다(사용자 목록을 그대로 따름).
-_QUANTITY_WORDS = re.compile(r"절반|반절|과반|곱절|몇\s*배")
-# 고유어 수: 사용자 목록(한~열)에 더해 열한~열아홉, 스물 이상(스무, 스물, 서른, 마흔, 쉰, 예순, 일흔, 여든, 아흔)도 같은 종류라 포함한다.
-_NATIVE_NUMBER = r"(?:(?:스무|스물|서른|마흔|쉰|예순|일흔|여든|아흔|열)?(?:다섯|여섯|일곱|여덟|아홉|한|두|세|네)|열|스무|스물|서른|마흔|쉰|예순|일흔|여든|아흔)"
-_SINO_NUMBER = r"(?:일|이|삼|사|오|육|칠|팔|구|십|백|천|만)+"  # 이십, 삼백 같은 합성 수도 잡는다
-_AFTER_UNIT = r"(?:(?![가-힣])|(?=[이가을를은는의도만씩으과와에인다로라였입]))"
-_NATIVE_QUANTITY = re.compile(rf"(?<![가-힣]){_NATIVE_NUMBER}\s*(?:문항|가지|건|명|점|개|배){_AFTER_UNIT}")
-_SINO_QUANTITY = re.compile(rf"(?<![가-힣]){_SINO_NUMBER}\s*(?:문항|퍼센트|건|명|점|개|배){_AFTER_UNIT}")
 
-# 변화·인과 표현(suggest-v3, 결정 2026-11-03). 표(스냅샷)에는 한 시점의 집계 값만 있고 시간에 따른 변화 값이나 원인 정보가 없다.
-# (1) 숫자 바로 뒤(단위 % 건 명 점 개 배 포인트 허용)에 개선|증가|감소|확대|축소|향상|상승|하락|인상|인하가 오면
-#     응답 비율(예: 개선점으로 고른 33%)을 "33% 개선"처럼 달성 목표나 변화 폭으로 읽게 하거나 표에 없는 비교를 만든다.
-# (2) 이므로|때문에|따라서|그래서|덕분에는 표에 없는 인과를 단정한다. 관찰과 제안은 따로 쓰게 한다.
-# 두 경우 모두 값이 표와 일치해도 문장의 뜻이 표에 없는 내용을 만든다. 문항·선택지 라벨 속 글자(예: "개선할 점 없음")는 검사에서 뺀다.
-_CHANGE_AFTER_NUMBER = re.compile(r"\d+(?:\.\d+)?\s*(?:%|퍼센트|건|명|점|개|배|포인트)?\s*(?:개선|증가|감소|확대|축소|향상|상승|하락|인상|인하)")
-# 숫자·단위 바로 뒤의 "여서/이어서/이라서/라서"도 같은 인과 연결이다(결정 2026-11-03). 근거: suggest-v3 통과 문장 16개 중 3개가
-# "37%여서", "71.4%여서", "100%여서"처럼 숫자 뒤에 이 연결을 썼다. 라벨 속 글자는 검사에서 뺀다. 일반 명사 뒤의 "~라서"까지 막지 않도록
-# 숫자(와 단위) 바로 뒤일 때만 잡는다.
-_CAUSAL_AFTER_NUMBER = re.compile(r"\d+(?:\.\d+)?\s*(?:%|퍼센트|건|명|점|개|배|포인트)?\s*(?:이어서|이라서|여서|라서)")
-_CAUSAL = re.compile(r"므로|때문에|따라서|그래서|덕분에")  # 므로: 이므로(사용자 목록)에 더해 했으므로, 하므로도 같은 인과 연결이라 포함했다
 
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
 _THOUSANDS = re.compile(r"(?<=\d),(?=\d{3})")
 _CODE = re.compile(r"[qQ]\d+")
-_SENTENCE_END = re.compile(r"[.!?。](?:\s+|$)")
 
 
 @dataclass
@@ -126,9 +101,6 @@ def _matches(token: str, values: list[float]) -> bool:
     return False
 
 
-def has_korean_quantity(sentence: str) -> bool:
-    """문장에 한글 수량 표현이 있으면 참. 라벨(문항·선택지 이름 등)에 든 글자는 미리 뺀 문장을 넘긴다."""
-    return bool(_QUANTITY_WORDS.search(sentence) or _NATIVE_QUANTITY.search(sentence) or _SINO_QUANTITY.search(sentence))
 
 
 def numbers_match(sentence: str, rows: list[dict], family: str, round_label: str) -> bool:

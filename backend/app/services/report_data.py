@@ -137,6 +137,11 @@ def build_report(session: Session, report_id: int) -> dict | None:
         ).all()
         for question, hypothesis in rows:
             normalized = normalize_question(question.type, question.options_json)  # question-v3 이전(목록)과 question-v4(객체)를 같은 필드로 읽는다
+            # 같은 원문항에서 나온 가설을 합친 문항: 대표 가설(hypothesis_id)에 합쳐진 가설의 진술문을 이어 붙이고, 불일치가 하나라도 있으면 불일치로 보인다.
+            merged = [session.get(Hypothesis, hid) for hid in normalized["merged_hypothesis_ids"]]
+            merged = [m for m in merged if m is not None]
+            statement = None if hypothesis is None else " ".join([hypothesis.statement, *(m.statement for m in merged)])
+            kind_value = None if hypothesis is None else ("contradictory" if any(h.kind == "contradictory" for h in [hypothesis, *merged]) else hypothesis.kind)
             questions.append(
                 {
                     "order_no": question.order_no,
@@ -149,14 +154,15 @@ def build_report(session: Session, report_id: int) -> dict | None:
                     "high_label": normalized["high_label"],
                     "kind": normalized["kind"],
                     "hypothesis_id": None if hypothesis is None else hypothesis.hypothesis_id,
-                    "hypothesis_kind": OPPORTUNITY_HYPOTHESIS_KIND if hypothesis is None else hypothesis.kind,
-                    "hypothesis_statement": OPPORTUNITY_STATEMENT if hypothesis is None else hypothesis.statement,
+                    "merged_hypothesis_ids": [m.hypothesis_id for m in merged],
+                    "hypothesis_kind": OPPORTUNITY_HYPOTHESIS_KIND if hypothesis is None else kind_value,
+                    "hypothesis_statement": OPPORTUNITY_STATEMENT if hypothesis is None else statement,
                 }
             )
     # 같은 실행에서 저장됐지만 문항이 없는 가설. R1(표본 적음)은 호출 C 입력에서 빼므로 항상 여기에 나온다.
     no_question = []
     if run_id is not None:
-        asked = {q["hypothesis_id"] for q in questions}
+        asked = {q["hypothesis_id"] for q in questions} | {hid for q in questions for hid in q["merged_hypothesis_ids"]}  # 합쳐진 가설도 문항이 있는 가설이다
         for hypothesis in session.scalars(select(Hypothesis).where(Hypothesis.run_id == run_id).order_by(Hypothesis.hypothesis_id)):
             if hypothesis.hypothesis_id in asked:
                 continue

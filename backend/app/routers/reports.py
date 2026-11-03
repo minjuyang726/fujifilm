@@ -76,7 +76,8 @@ class QuestionOut(BaseModel):
     low_label: str | None
     high_label: str | None
     kind: str  # hypothesis | opportunity_matrix
-    hypothesis_id: int | None  # 영역 확인 문항은 가설이 없다
+    hypothesis_id: int | None  # 영역 확인 문항은 가설이 없다. 같은 원문항의 가설을 합친 문항은 대표 가설이다
+    merged_hypothesis_ids: list[int]  # 이 문항으로 합쳐진 나머지 가설(없으면 빈 목록)
     hypothesis_kind: str
     hypothesis_statement: str
 

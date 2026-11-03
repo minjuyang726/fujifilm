@@ -11,7 +11,8 @@ question-v3까지의 행(scale5/single/multi, options_json은 목록)도 normali
 
 from dataclasses import dataclass, field
 
-from app.services.action_cards import AREA_QUESTION_CODE, CARD_SEPARATOR, DELIVERABLE_LABEL, EXCLUDED_OPTION_CODES
+from app.services.hypotheses import KIND_CONTRADICTORY
+from app.services.action_cards import AREA_QUESTION_CODE, CARD_SEPARATOR, DELIVERABLE_LABEL, EXCLUDED_OPTION_CODES, canonical_label
 
 FORM_SCALE10 = "scale10"
 FORM_SCALE10_MATRIX = "scale10_matrix"
@@ -41,7 +42,7 @@ R3_SOURCE_QUESTION = "q09"
 OPPORTUNITY_TEXT = "다음 영역별로 개선이 필요한 정도를 눈금에서 골라 주세요."
 OPPORTUNITY_LOW_LABEL = "전혀 필요 없음"
 OPPORTUNITY_HIGH_LABEL = "매우 필요함"
-OPPORTUNITY_STATEMENT = "액션 카드의 개선 영역 우선순위를 다음 회차에서 확인하는 문항이다."
+OPPORTUNITY_STATEMENT = "액션 카드의 개선 영역 우선순위를 다음 회차에서 확인하는 문항입니다."
 OPPORTUNITY_HYPOTHESIS_KIND = "opportunity"  # 가설이 없어서 화면의 가설 종류 칸에 쓰는 표시 값이다
 
 
@@ -64,7 +65,7 @@ def source_questions(related_row_ids: list[str]) -> list[str]:
 
 def items_for(question_code: str, options: list[dict]) -> list[dict]:
     excluded = EXCLUDED_ITEM_CODES.get(question_code, ())
-    return [{"code": option["code"], "label": option["label"]} for option in options if option["code"] not in excluded]
+    return [{"code": option["code"], "label": canonical_label(option["label"])} for option in options if option["code"] not in excluded]
 
 
 def decide_form(related_row_ids: list[str], survey_options: dict[str, list[dict]]) -> FormSpec | None:
@@ -93,9 +94,38 @@ def opportunity_question(survey_options: dict[str, list[dict]]) -> dict:
     }
 
 
-def scale_options_json(kind: str, low_label: str, high_label: str, items: list[dict]) -> dict:
-    """scale10/scale10_matrix의 options_json."""
-    return {"kind": kind, "low_label": low_label, "high_label": high_label, "items": [dict(item) for item in items]}
+def scale_options_json(kind: str, low_label: str, high_label: str, items: list[dict], merged_hypothesis_ids: list[int] | None = None) -> dict:
+    """scale10/scale10_matrix의 options_json. 같은 원문항에서 나온 가설을 한 문항으로 합쳤으면 합쳐진 가설 id를 merged_hypothesis_ids에 담는다
+    (문항의 hypothesis_id는 대표 가설이다. 컬럼을 늘리지 않으려고 options_json 객체에 둔다)."""
+    stored = {"kind": kind, "low_label": low_label, "high_label": high_label, "items": [dict(item) for item in items]}
+    if merged_hypothesis_ids:
+        stored["merged_hypothesis_ids"] = list(merged_hypothesis_ids)
+    return stored
+
+
+def merge_by_source(items: list[dict]) -> list[dict]:
+    """같은 원문항(source_question)에서 나온 가설을 한 문항 입력으로 합친다. 코드가 정하고 모델은 판단하지 않는다.
+
+    - 대표 가설: 불일치(contradictory) 가설이 있으면 그것(R3 출처 표시를 잃지 않는다), 없으면 그룹의 첫 가설(우선순위가 높은 쪽).
+    - 모델에 가는 statement는 그룹의 진술문을 이어 붙이고, kind는 불일치가 하나라도 있으면 contradictory다.
+    - 합쳐진 나머지 가설은 merged_items에 둔다. 순서는 각 그룹의 첫 가설이 나온 순서(우선순위)를 따른다.
+    items의 각 원소에는 source_question, kind, statement가 있어야 한다."""
+    groups: dict[str, list[dict]] = {}
+    for item in items:
+        groups.setdefault(item["source_question"], []).append(item)
+    merged = []
+    for members in groups.values():
+        primary = next((m for m in members if m["kind"] == KIND_CONTRADICTORY), members[0])
+        others = [m for m in members if m is not primary]
+        merged.append(
+            {
+                **primary,
+                "kind": KIND_CONTRADICTORY if any(m["kind"] == KIND_CONTRADICTORY for m in members) else primary["kind"],
+                "statement": " ".join([primary["statement"], *(m["statement"] for m in others)]),
+                "merged_items": others,
+            }
+        )
+    return merged
 
 
 def is_card_sentence(sentence: str) -> bool:
@@ -113,6 +143,10 @@ def normalize_question(question_type: str, options_json) -> dict:
         return {
             "form": question_type, "items": items, "low_label": options_json.get("low_label"), "high_label": options_json.get("high_label"),
             "kind": options_json.get("kind") or KIND_HYPOTHESIS, "options": items,
+            "merged_hypothesis_ids": [int(x) for x in options_json.get("merged_hypothesis_ids") or []],
         }
     items = [dict(item) for item in options_json or []]
-    return {"form": question_type, "items": items, "low_label": None, "high_label": None, "kind": KIND_HYPOTHESIS, "options": options_json}
+    return {
+        "form": question_type, "items": items, "low_label": None, "high_label": None, "kind": KIND_HYPOTHESIS, "options": options_json,
+        "merged_hypothesis_ids": [],
+    }

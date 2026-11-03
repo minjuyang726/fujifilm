@@ -97,7 +97,7 @@ def find_hypotheses(table: dict, question_types: dict[str, str]) -> list[dict]:
                     "kind": KIND_CONTRADICTORY,
                     "statement": (
                         f"합성 설문의 '{q_text}'에서 '{sat_rows[0]['option']}'·'{sat_rows[1]['option']}' 응답이 합쳐 {sat_pct}%인데, "
-                        f"'{recommend['question_text']}'에서 '{recommend['option']}' 응답이 {recommend['pct']}%로 만족과 추천 경험이 어긋난다."
+                        f"'{recommend['question_text']}'에서 '{recommend['option']}' 응답이 {recommend['pct']}%로 만족과 추천 경험이 어긋납니다."
                     ),
                     "related_row_ids": [o["row_id"] for o in sat_rows] + [recommend["row_id"]],
                 }
@@ -117,7 +117,7 @@ def find_hypotheses(table: dict, question_types: dict[str, str]) -> list[dict]:
                     "rule": "R4",
                     "kind": KIND_CONTRADICTORY,
                     "statement": (
-                        f"합성 설문의 전반 만족(상위 두 선택지 합)은 {sat_pct}%인데 실측 VOC{small} 판정 묶음의 평균 평점은 {mean}으로 설문과 VOC가 어긋난다."
+                        f"합성 설문의 전반 만족(상위 두 선택지 합)은 {sat_pct}%인데 실측 VOC{small} 판정 묶음의 평균 평점은 {mean}으로 설문과 VOC가 어긋납니다."
                     ),
                     "related_row_ids": [o["row_id"] for o in sat_rows] + ["voc:judged:mean_unweighted"]
                     + (["voc:judged:count"] if judged["small_sample"] else []),
@@ -146,7 +146,7 @@ def find_hypotheses(table: dict, question_types: dict[str, str]) -> list[dict]:
                         "kind": KIND_UNCERTAIN,
                         "statement": (
                             f"합성 설문의 '{first['question_text']}'에서 1위는 '{first['option']}'({first['pct']}%), "
-                            f"2위는 '{second['option']}'({second['pct']}%)로 차이가 {gap}%p로 작아 우세한 응답이 불확실하다."
+                            f"2위는 '{second['option']}'({second['pct']}%)로 차이가 {gap}%p로 작아 우세한 응답이 불확실합니다."
                         ),
                         "related_row_ids": [first["row_id"], second["row_id"]],
                     },
@@ -162,7 +162,7 @@ def find_hypotheses(table: dict, question_types: dict[str, str]) -> list[dict]:
             {
                 "rule": "R1",
                 "kind": KIND_UNCERTAIN,
-                "statement": f"실측 VOC 판정 묶음이 {n}건으로 표본이 적어(기준 {threshold}건 미만) VOC 평점을 해석하기 어렵다.",
+                "statement": f"실측 VOC 판정 묶음이 {n}건으로 표본이 적어(기준 {threshold}건 미만) VOC 평점을 해석하기 어렵습니다.",
                 "related_row_ids": ["voc:judged:count"],
             }
         )

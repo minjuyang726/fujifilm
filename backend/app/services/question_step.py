@@ -23,12 +23,13 @@ from app.llm.client import LLMClient, PermanentLLMError, TransientLLMError
 from app.llm.cost import CostGuard
 from app.llm.output_schemas.question import QUESTION_SCHEMA, SCHEMA_NAME
 from app.llm.prompts.question import PROMPT_VERSION, SYSTEM_PROMPT, build_user_prompt
+from app.llm.rejection import rejection_codes
 from app.llm.question_validators import QuestionFilterResult, filter_questions, parse_questions
 from app.models import (
     ActionSuggestion, AnalysisSnapshot, Hypothesis, LlmCallLog, NextSurveyQuestion, PipelineRun, ProductFamily, Report, Round, SurveyQuestion,
 )
 from app.services.hypotheses import find_hypotheses, question_targets
-from app.services.question_forms import KIND_HYPOTHESIS, decide_form, is_card_sentence, opportunity_question, scale_options_json
+from app.services.question_forms import KIND_HYPOTHESIS, decide_form, is_card_sentence, merge_by_source, opportunity_question, scale_options_json
 from app.services.report_data import report_snapshot_id
 
 logger = logging.getLogger(__name__)
@@ -77,8 +78,8 @@ def question_inputs(session: Session, snapshot: AnalysisSnapshot) -> list[dict]:
     for item in question_targets(hypotheses_for(session, snapshot)):
         spec = decide_form(item["related_row_ids"], options)
         if spec is not None:
-            inputs.append({**item, "form": spec.form, "items": spec.items})
-    return inputs
+            inputs.append({**item, "form": spec.form, "items": spec.items, "source_question": spec.source_question})
+    return merge_by_source(inputs)  # 같은 원문항에서 나온 가설은 한 문항으로 합친다
 
 
 def prompts_for(hypotheses: list[dict]) -> tuple[str, str]:
@@ -122,6 +123,7 @@ def run_next_survey_draft(
             "dropped_meta": 0,
             "dropped_reasons": {},
             "opportunity_question": 0,
+            "merged_hypotheses": 0,
             "attempts": 0,
             "llm_calls": 0,
         }
@@ -145,16 +147,20 @@ def run_next_survey_draft(
             item["hypothesis_id"] = row.hypothesis_id
         order_of = {row.hypothesis_id: index for index, row in enumerate(stored)}  # 가설 우선순위 순서로 문항 번호를 매긴다
         survey_opts = survey_options(session, round_row.round_id)
-        specs = {}  # hypothesis_id -> 코드가 정한 형식·항목
-        targets = []
+        spec_by_source = {}  # 출처 문항 -> 코드가 정한 형식·항목 (같은 출처면 같다)
+        candidates = []
         for item in question_targets(found):  # R1은 저장만 하고 LLM 입력에서 뺀다
             spec = decide_form(item["related_row_ids"], survey_opts)
             if spec is None:
                 continue  # 출처 설문 문항을 못 찾은 가설은 문항을 만들지 않는다
-            item["form"] = spec.form
-            specs[item["hypothesis_id"]] = spec
-            targets.append(item)
+            item["form"], item["source_question"] = spec.form, spec.source_question
+            spec_by_source[spec.source_question] = spec
+            candidates.append(item)
+        targets = merge_by_source(candidates)  # 같은 원문항에서 나온 가설은 한 문항으로 합친다(대표 가설 하나가 문항에 연결된다)
+        specs = {target["hypothesis_id"]: spec_by_source[target["source_question"]] for target in targets}
+        target_by_id = {target["hypothesis_id"]: target for target in targets}
         counters["question_hypotheses"] = len(targets)
+        counters["merged_hypotheses"] = len(candidates) - len(targets)
         if not targets:
             session.commit()
             run = session.get(PipelineRun, run_id)
@@ -217,7 +223,8 @@ def run_next_survey_draft(
                 LlmCallLog(
                     run_id=run_id, call_type=CALL_TYPE, model_name=model_name, prompt_version=PROMPT_VERSION, attempt_no=call_no,
                     status="ok" if filtered.accepted else "invalid_output", item_count=len(targets), latency_ms=latency_ms,
-                    error_code=parsed.problem, input_tokens=result.input_tokens, output_tokens=result.output_tokens, created_at=now(),
+                    error_code=rejection_codes(parsed.problem, filtered.counters, filtered.dropped_reasons), input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens, created_at=now(),
                 )
             )
             final = filtered
@@ -252,7 +259,11 @@ def run_next_survey_draft(
                     NextSurveyQuestion(
                         report_id=report_id, hypothesis_id=item["hypothesis_id"], run_id=run_id, order_no=order_no,
                         text=item["text"], type=spec.form,
-                        options_json=scale_options_json(KIND_HYPOTHESIS, item["low_label"], item["high_label"], spec.items), status="draft",
+                        options_json=scale_options_json(
+                            KIND_HYPOTHESIS, item["low_label"], item["high_label"], spec.items,
+                            [merged["hypothesis_id"] for merged in target_by_id[item["hypothesis_id"]]["merged_items"]],
+                        ),
+                        status="draft",
                     )
                 )
             status, error_code = "succeeded", None

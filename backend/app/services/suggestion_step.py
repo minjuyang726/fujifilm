@@ -24,10 +24,11 @@ from app.llm.cost import CostGuard
 from app.llm.card_validators import CardFilterResult, filter_cards, parse_cards
 from app.llm.output_schemas.suggestion import SCHEMA_NAME, SUGGESTION_SCHEMA
 from app.llm.prompts.suggestion import PROMPT_VERSION, SYSTEM_PROMPT, build_user_prompt
+from app.llm.rejection import rejection_codes
 from app.models import (
     ActionSuggestion, AnalysisSnapshot, LlmCallLog, PipelineRun, ProductFamily, Report, Round, SurveyQuestion,
 )
-from app.services.action_cards import AREA_QUESTION_CODE, Area, render_area_card, review_card, select_areas
+from app.services.action_cards import AREA_QUESTION_CODE, Area, canonical_label, render_area_card, review_card, select_areas
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ def option_labels(session: Session, round_id: int) -> dict[str, str]:
     options = session.scalar(
         select(SurveyQuestion.options_json).where(SurveyQuestion.round_id == round_id, SurveyQuestion.code == AREA_QUESTION_CODE)
     )
-    return {option["code"]: option["label"] for option in (options or [])}
+    return {option["code"]: canonical_label(option["label"]) for option in (options or [])}
 
 
 def areas_for(session: Session, snapshot: AnalysisSnapshot) -> list[Area]:
@@ -184,7 +185,7 @@ def run_action_suggestions(
                 LlmCallLog(
                     run_id=run_id, call_type=CALL_TYPE, model_name=model_name, prompt_version=PROMPT_VERSION,
                     attempt_no=call_no, status="ok" if filtered.complete else "invalid_output", item_count=len(areas),
-                    latency_ms=latency_ms, error_code=parsed.problem, input_tokens=result.input_tokens,
+                    latency_ms=latency_ms, error_code=rejection_codes(parsed.problem, filtered.counters, filtered.dropped_reasons), input_tokens=result.input_tokens,
                     output_tokens=result.output_tokens, created_at=now(),
                 )
             )

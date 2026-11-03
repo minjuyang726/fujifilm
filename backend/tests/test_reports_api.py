@@ -60,14 +60,15 @@ def test_report_has_action_plan_and_next_survey_together(world):
     survey = body["next_survey"]
     assert survey["status"] == "draft" and survey["run_id"] and survey["questions"]
     opportunity, question = survey["questions"][0], survey["questions"][1]
-    fields = {"order_no", "text", "type", "options", "form", "items", "low_label", "high_label", "kind", "hypothesis_id", "hypothesis_kind", "hypothesis_statement"}
+    fields = {"order_no", "text", "type", "options", "form", "items", "low_label", "high_label", "kind", "hypothesis_id", "merged_hypothesis_ids",
+              "hypothesis_kind", "hypothesis_statement"}
     assert set(opportunity) == fields and set(question) == fields
     # 영역 확인 문항(코드 템플릿)은 맨 앞이고 가설이 없다
     assert opportunity["order_no"] == 1 and opportunity["kind"] == "opportunity_matrix" and opportunity["hypothesis_id"] is None
     assert opportunity["form"] == "scale10_matrix" and [i["label"] for i in opportunity["items"]] == ["필름·소모품 비용", "현상·인화 대기", "사용법 안내", "결과물 품질"]
     assert (opportunity["low_label"], opportunity["high_label"]) == ("전혀 필요 없음", "매우 필요함") and opportunity["options"] == opportunity["items"]
     hypothesis = world.session.get(Hypothesis, question["hypothesis_id"])
-    assert hypothesis.kind == question["hypothesis_kind"] and hypothesis.statement == question["hypothesis_statement"]
+    assert hypothesis.kind == question["hypothesis_kind"] and question["hypothesis_statement"].startswith(hypothesis.statement)  # 합친 문항은 진술문이 이어진다
     assert question["kind"] == "hypothesis" and (question["low_label"], question["high_label"]) == ("전혀 그렇지 않음", "매우 그러함")
     assert {q["type"] for q in survey["questions"]} <= {"scale10", "scale10_matrix"} and all(q["form"] == q["type"] for q in survey["questions"])
     # R1(표본 적음)은 문항이 없고 별도 목록에 표시 문구와 함께 나온다
@@ -222,7 +223,7 @@ def test_export_is_refused_when_the_document_would_contain_an_external_reference
 
 # ---------- 카드 구조화(API) ----------
 AREA_SENTENCE = "합성 설문 기준 '{label}' 영역 — 이 영역을 개선 희망으로 고른 응답자는 33.0%이며 {rank}입니다. ▸ 산출물(FAQ 초안): 답변 초안입니다. 기간은 [확인 필요]입니다."
-VOC_SENTENCE = "쿠팡 리뷰 기준(실측) — 선택한 회차의 리뷰는 63건이고, 그중 제목·본문 없음이 50건, 판정이 끝난 글이 7건이다. 판정 표본이 적어 영역 우선순위는 설문 기준으로만 정했다."
+VOC_SENTENCE = "쿠팡 리뷰 기준(실측) — 선택한 회차의 리뷰는 63건이고, 그중 제목·본문 없음이 50건, 판정이 끝난 글이 7건입니다. 판정 표본이 적어 영역 우선순위는 설문 기준으로만 정했습니다."
 LEGACY_SENTENCE = "합성 설문에서 추천 응답이 49건이다."
 
 

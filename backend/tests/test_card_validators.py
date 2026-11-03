@@ -11,7 +11,7 @@ from app.llm.suggestion_validators import BAD_SCHEMA, DROPPED_NO_EVIDENCE, DROPP
 from app.services.action_cards import Area
 
 GOOD_SENTENCE = "이 영역을 개선 희망으로 고른 응답자는 {pct}이며 {rank}입니다."
-GOOD_TEXT = "자주 묻는 질문과 답변 초안입니다. 기간과 비용은 [확인 필요]입니다."
+GOOD_TEXT = "Q. 처리 기간은 어떻게 되나요? / A. 처리 기간은 [확인 필요: 현재 안내 중인 처리 기간]입니다."
 
 
 def area(code, label, rank, rank_label, joint=False, pct=33.0):
@@ -153,8 +153,9 @@ def test_deliverable_kind_must_be_in_the_fixed_list():
 
 def test_deliverable_text_length_and_empty():
     assert check(card(text="  ")) == (DROPPED_OTHER, "deliverable_empty")
-    assert check(card(text="가" * 200)) == (None, None)
-    assert check(card(text="가" * 201)) == (DROPPED_OTHER, "deliverable_too_long")
+    assert check(card(kind="고객 안내 문구 초안", text="가" * 300)) == (None, None)  # 산출물 상한은 300자(suggest-v4의 200자에서 늘렸다)
+    assert check(card(kind="고객 안내 문구 초안", text="가" * 301)) == (DROPPED_OTHER, "deliverable_too_long")
+    assert check(card(kind="고객 안내 문구 초안", text="가" * 250)) == (None, None)  # 이전 상한(200자)을 넘는 길이도 이제 통과한다
 
 
 @pytest.mark.parametrize("text", ["안내 후 이용이 늘어나도록 합니다.", "효과를 기대합니다.", "문의가 감소합니다.", "대기가 해소됩니다.", "비용이 줄어듭니다.", "그래서 안내합니다."])
@@ -163,7 +164,8 @@ def test_deliverable_with_change_effect_or_causal_expressions_is_dropped(text):
 
 
 def test_deliverable_may_use_the_confirmation_marker_and_the_word_improvement():
-    assert check(card(text="개선 사항은 [확인 필요]로 표시하고 항목마다 담당을 적습니다.")) == (None, None)
+    assert check(card(kind="내부 점검 항목표", text="개선 사항은 [확인 필요]로 표시하고 항목마다 담당을 적습니다.")) == (None, None)
+    assert check(card(kind="내부 점검 항목표", text="처리 기간은 [확인 필요: 현재 안내 중인 처리 기간]입니다.")) == (None, None)
 
 
 # ---------- 필터 ----------
@@ -199,3 +201,61 @@ def test_filter_missing_one_area_is_not_complete():
 
 def test_filter_with_no_areas_is_never_complete():
     assert filter_cards([], []).complete is False
+
+
+# ---------- suggest-v5: 산출물은 그대로 쓸 수 있는 초안 문구 ----------
+NOTICE_KIND = "고객 안내 문구 초안"
+
+
+@pytest.mark.parametrize("text", [
+    "고객에게 안내되는 예상 기간은 곧 알려 드립니다.",
+    "예상 기간 안에 처리됩니다.",
+    "예상 처리 기간을 안내해 드립니다.",
+    "소요 기간은 문의 후에 안내합니다.",
+    "실제 결제 금액이 일치하는지 확인해 드립니다.",
+    "결제 금액이 일치하면 접수가 완료됩니다.",
+    "재고가 있는 상품만 안내합니다.",
+    "판매 단위는 한 세트입니다.",
+])
+def test_phrases_that_assume_operational_facts_are_dropped(text):
+    assert check(card(kind=NOTICE_KIND, text=text)) == (DROPPED_OTHER, "deliverable_operational_fact")
+
+
+def test_the_same_phrases_are_allowed_inside_a_confirmation_slot():
+    assert check(card(kind=NOTICE_KIND, text="처리 기간은 [확인 필요: 현재 안내 중인 예상 기간]입니다.")) == (None, None)
+    assert check(card(kind=NOTICE_KIND, text="결제 내용은 [확인 필요: 실제 결제 금액이 일치하는지 확인하는 방법]에 따라 안내합니다.")) == (None, None)
+    assert check(card(kind=NOTICE_KIND, text="구성은 [확인 필요: 판매 단위와 재고 상태]를 확인한 뒤 안내합니다.")) == (None, None)
+    # 칸 밖에 같은 표현이 하나라도 남으면 거부한다
+    assert check(card(kind=NOTICE_KIND, text="재고는 [확인 필요: 재고 현황]이고 재고가 있습니다.")) == (DROPPED_OTHER, "deliverable_operational_fact")
+
+
+def test_numbers_are_still_dropped_even_inside_a_confirmation_slot():
+    assert check(card(kind=NOTICE_KIND, text="처리 기간은 [확인 필요: 3일 이내인지]입니다.")) == (DROPPED_NUMBER_MISMATCH, None)
+    assert check(card(kind=NOTICE_KIND, text="처리 기간은 [확인 필요: 현재 비율 %]입니다.")) == (DROPPED_NUMBER_MISMATCH, None)
+
+
+def test_everyday_words_that_contain_change_words_are_not_blocked():
+    # "확인하"에는 "인하"가 들어 있다. 초안은 "확인"을 자주 쓰므로 막지 않는다.
+    assert check(card(kind=NOTICE_KIND, text="접수 내용을 확인하겠습니다. 확인하신 뒤 문의해 주십시오.")) == (None, None)
+
+
+def test_change_cause_and_effect_rules_stay():
+    assert check(card(kind=NOTICE_KIND, text="안내를 개선하면 문의가 줄어듭니다.")) == (DROPPED_OTHER, "deliverable_change_or_cause")
+    assert check(card(kind=NOTICE_KIND, text="따라서 안내를 드립니다.")) == (DROPPED_OTHER, "deliverable_change_or_cause")
+
+
+def test_faq_drafts_need_a_question_and_an_answer():
+    assert check(card(kind="FAQ 초안", text="Q. 처리 기간은 어떻게 되나요? / A. [확인 필요: 현재 안내 중인 처리 기간]입니다.")) == (None, None)
+    assert check(card(kind="FAQ 초안", text="자주 묻는 질문과 답변을 정리해야 합니다.")) == (DROPPED_OTHER, "faq_format")
+    assert check(card(kind="FAQ 초안", text="Q. 처리 기간은 어떻게 되나요?")) == (DROPPED_OTHER, "faq_format")
+    assert check(card(kind="FAQ 초안", text="A. 확인 후 안내합니다.")) == (DROPPED_OTHER, "faq_format")
+    assert check(card(kind="FAQ 초안", text="FAQ. 문답을 정리했습니다.")) == (DROPPED_OTHER, "faq_format")  # FAQ의 Q., A.는 문답 표시가 아니다
+    assert check(card(kind=NOTICE_KIND, text="질문과 답변 형식이 아니어도 됩니다.")) == (None, None)  # 다른 종류에는 적용하지 않는다
+
+
+def test_the_operational_fact_list_is_documented_in_code():
+    from app.llm import card_validators
+
+    assert len(card_validators.OPERATIONAL_FACT_PATTERNS) >= 7
+    source = open(card_validators.__file__, encoding="utf-8").read()
+    assert "근거:" in source and "안내되는 예상 기간" in source  # 목록에 넣은 근거를 주석으로 남겼다

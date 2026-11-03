@@ -79,7 +79,7 @@ def rows_of(snapshot):
 
 
 SENTENCE = "이 영역을 개선 희망으로 고른 응답자는 {pct}이며 {rank}입니다."
-DELIVERABLE = "자주 묻는 질문과 답변 초안입니다. 기간과 비용은 [확인 필요]입니다."
+DELIVERABLE = "Q. 처리 기간은 어떻게 되나요? / A. 처리 기간은 [확인 필요: 현재 안내 중인 처리 기간]입니다."
 
 
 def card(code, sentence=SENTENCE, kind="FAQ 초안", text=DELIVERABLE):
@@ -130,7 +130,7 @@ def test_full_flow_saves_report_cards_and_counters(world):
     assert all(s.snapshot_id == snapshot.snapshot_id for s in saved)
     log = world.session.scalars(select(LlmCallLog)).all()
     assert len(log) == 1 and log[0].call_type == "B" and log[0].status == "ok" and log[0].model_name == "fake-model"
-    assert log[0].prompt_version == "suggest-v4" and (log[0].input_tokens, log[0].output_tokens) == (1500, 300) and log[0].item_count == 3
+    assert log[0].prompt_version == "suggest-v5" and (log[0].input_tokens, log[0].output_tokens) == (1500, 300) and log[0].item_count == 3
     # 호출 B에는 영역 코드·라벨·순위 라벨만 간다: 표, 수치, 근거 ID, 리뷰 본문은 가지 않는다
     sent = fake.calls[0]["user_prompt"]
     assert fake.calls[0]["model"] == "fake-model"
@@ -146,8 +146,8 @@ def test_the_review_card_is_a_code_template_and_mentions_the_small_sample(world)
     rows = rows_of(snapshot)
     total, no_text, judged = rows["voc:total:count"]["metrics"]["리뷰 수"], rows["voc:no_text:count"]["metrics"]["건수"], rows["voc:judged:count"]["metrics"]["건수"]
     assert review.sentence == (
-        f"쿠팡 리뷰 기준(실측) — 선택한 회차의 리뷰는 {total}건이고, 그중 제목·본문 없음이 {no_text}건, 판정이 끝난 글이 {judged}건이다. "
-        "판정 표본이 적어 영역 우선순위는 설문 기준으로만 정했다."
+        f"쿠팡 리뷰 기준(실측) — 선택한 회차의 리뷰는 {total}건이고, 그중 제목·본문 없음이 {no_text}건, 판정이 끝난 글이 {judged}건입니다. "
+        "판정 표본이 적어 영역 우선순위는 설문 기준으로만 정했습니다."
     )
     assert len(fake.calls) == 1  # 리뷰 카드를 위한 모델 호출은 없다
 
@@ -209,7 +209,10 @@ def test_zero_accepted_cards_fail_the_run_after_three_requests(world):
     assert (run.counters["proposed"], run.counters["accepted"], run.counters["dropped_number_mismatch"], run.counters["dropped_other"]) == (3, 0, 3, 3)
     assert run.counters["dropped_reasons"] == {"missing_area": 3}
     assert world.session.scalars(select(Report)).all() == [] and world.session.scalars(select(ActionSuggestion)).all() == []
-    assert [row.status for row in world.session.scalars(select(LlmCallLog))] == ["invalid_output"] * 3
+    logs = world.session.scalars(select(LlmCallLog).order_by(LlmCallLog.call_id)).all()
+    assert [row.status for row in logs] == ["invalid_output"] * 3
+    # 모든 시도의 거부 사유가 코드 값으로 남는다(문장 내용은 남지 않는다)
+    assert [row.error_code for row in logs] == ["dropped_number_mismatch=3;dropped_other=3;missing_area=3"] * 3
 
 
 def test_broken_schema_then_valid_output_succeeds_on_the_second_request(world):
@@ -228,7 +231,9 @@ def test_a_response_missing_an_area_is_rejected_and_retried(world):
     body = run_step(world).json()
     run = world.session.get(PipelineRun, body["run_id"])
     assert body["status"] == "succeeded" and run.counters["attempts"] == 2
-    assert [row.status for row in world.session.scalars(select(LlmCallLog).order_by(LlmCallLog.call_id))] == ["invalid_output", "ok"]
+    logs = world.session.scalars(select(LlmCallLog).order_by(LlmCallLog.call_id)).all()
+    assert [row.status for row in logs] == ["invalid_output", "ok"]
+    assert [row.error_code for row in logs] == ["dropped_other=1;missing_area=1", None]  # 첫 시도의 거부 사유가 남는다
     assert len(world.session.scalars(select(ActionSuggestion)).all()) == 4  # 불완전한 응답의 카드는 저장되지 않았다
 
 

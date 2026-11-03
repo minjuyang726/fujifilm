@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass, field
 
 from app.llm.prompts.question import MAX_LABEL_CHARS, MAX_QUESTION_CHARS
-from app.llm.suggestion_validators import BAD_SCHEMA, NOT_JSON, has_korean_quantity
+from app.llm.card_validators import BAD_SCHEMA, NOT_JSON, has_korean_quantity
 
 DROPPED_HYPOTHESIS = "dropped_hypothesis"
 DROPPED_FORMAT = "dropped_format"

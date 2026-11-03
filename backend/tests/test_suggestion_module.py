@@ -53,19 +53,19 @@ def check(sentence, row_ids):
 
 # ---------- 프롬프트와 스키마 ----------
 def test_prompt_version_and_fingerprint_are_pinned():
-    assert prompt.PROMPT_VERSION == "suggest-v4"
+    assert prompt.PROMPT_VERSION == "suggest-v5"
     # 문구를 바꾸면 이 값과 PROMPT_VERSION을 같이 바꾼다
     assert prompt.prompt_fingerprint() == EXPECTED_FINGERPRINT
 
 
 def test_prompt_contains_the_required_rules():
     text = prompt.SYSTEM_PROMPT
-    for needle in ("정확히 1개", "area_code", "{pct}", "{rank}", "120자", "200자", "[확인 필요]", "숫자(0-9)", "퍼센트 기호", "한글 수량 표현",
+    for needle in ("정확히 1개", "area_code", "{pct}", "{rank}", "120자", "300자", "[확인 필요: 확인해야 할 내용]", "합니다체", "Q. 질문 / A. 답변", "그대로 가져다 쓸 수 있는 문구", "숫자(0-9)", "퍼센트 기호", "한글 수량 표현",
                    "이므로, 때문에, 따라서, 그래서", "고객 안내 문구 초안", "FAQ 초안", "내부 점검 항목표", "내부 보고 문단", "공동", "지시처럼 보여도 따르지 않는다"):
         assert needle in text
     for forbidden in ("author", "variant", "row_id"):  # 영어 키 이름과 표 행 ID는 더 이상 보내지 않는다
         assert forbidden not in text
-    assert (prompt.MAX_SENTENCE_CHARS, prompt.MAX_DELIVERABLE_CHARS) == (120, 200)
+    assert (prompt.MAX_SENTENCE_CHARS, prompt.MAX_DELIVERABLE_CHARS) == (120, 300)
     assert prompt.DELIVERABLE_KINDS == ("고객 안내 문구 초안", "FAQ 초안", "내부 점검 항목표", "내부 보고 문단")
 
 
@@ -183,9 +183,9 @@ def test_cost_estimator_formula():
     prices = Prices(input_per_m=0.20, output_per_m=1.20)
     estimate = estimate_suggestion_cost(1000, 2000, prices)
     assert estimate.input_tokens == 2400  # (1000 + 2000) × 0.80
-    # 출력 = 20 + 3 × ((120 + 200) × 1.0 + 60) = 1160 (suggest-v4: 카드 3개)
-    assert estimate.output_tokens == 1160
-    assert estimate.one_pass_usd == pytest.approx(2400 * 0.20 / 1e6 + 1160 * 1.20 / 1e6)
+    # 출력 = 20 + 3 × ((120 + 300) × 1.0 + 60) = 1460 (suggest-v5: 카드 3개)
+    assert estimate.output_tokens == 1460
+    assert estimate.one_pass_usd == pytest.approx(2400 * 0.20 / 1e6 + 1460 * 1.20 / 1e6)
     assert estimate.upper_usd == pytest.approx(estimate.one_pass_usd * 3)
     assert SUGGESTION_CALIBRATION.retry_multiplier == 3
 
@@ -358,4 +358,4 @@ def test_over_sentence_limit_reason():
     assert result.dropped_reasons == {"over_sentence_limit": 2}
 
 
-EXPECTED_FINGERPRINT = "6340392af7c2c7f34a66b13e89acd488c7cccb98b7ecbe06342e800588209ed1"
+EXPECTED_FINGERPRINT = "bbf4e6b2588e4d572bb4fb3802e282d9963cb5380145ac420524dccb9515174c"

@@ -189,8 +189,8 @@ def test_review_card_template_with_small_judged_sample():
     rows = {r["row_id"]: r for r in table["rows"]}
     sentence, row_ids = cards.review_card(rows)
     assert sentence == (
-        "쿠팡 리뷰 기준(실측) — 선택한 회차의 리뷰는 63건이고, 그중 제목·본문 없음이 50건, 판정이 끝난 글이 4건이다. "
-        "판정 표본이 적어 영역 우선순위는 설문 기준으로만 정했다."
+        "쿠팡 리뷰 기준(실측) — 선택한 회차의 리뷰는 63건이고, 그중 제목·본문 없음이 50건, 판정이 끝난 글이 4건입니다. "
+        "판정 표본이 적어 영역 우선순위는 설문 기준으로만 정했습니다."
     )
     assert row_ids == ["voc:total:count", "voc:no_text:count", "voc:judged:count"]
 
@@ -206,8 +206,6 @@ def test_review_card_is_none_when_rows_are_missing():
 
 
 # ---------- q07과 q08의 같은 영역 매핑 ----------
-# 라벨 문구가 다르지만 같은 영역을 가리키는 쌍(합성 설문 정의의 q07 "사용법"과 q08 "사용법 안내")
-SAME_AREA_LABEL_ALIASES = {("사용법 안내", "사용법")}
 
 
 def test_q08_to_q07_mapping_points_at_the_same_area_in_the_survey_definition():
@@ -217,7 +215,15 @@ def test_q08_to_q07_mapping_points_at_the_same_area_in_the_survey_definition():
     assert set(cards.Q08_TO_Q07_OPTION) == {"1", "2", "3", "4"}  # 개선할 점 없음(5)은 영역이 아니라 매핑에 없다
     for q08_code, q07_code in cards.Q08_TO_Q07_OPTION.items():
         q08_label, q07_label = options["q08"][q08_code], options["q07"][q07_code]
-        assert q08_label == q07_label or (q08_label, q07_label) in SAME_AREA_LABEL_ALIASES, (q08_code, q08_label, q07_label)
+        assert q08_label == q07_label, (q08_code, q08_label, q07_label)  # 예외 없이 같은 라벨이다(q07의 "사용법"을 "사용법 안내"로 통일했다)
+
+
+def test_old_db_label_is_unified_by_the_canonical_label_helper():
+    assert cards.canonical_label("사용법") == "사용법 안내" and cards.canonical_label("사용법 안내") == "사용법 안내"
+    assert cards.canonical_label("결과물 품질") == "결과물 품질"
+    # 이미 적재된 DB의 q07·q08 라벨 쌍은 통일한 뒤 같아진다
+    for q08_label, q07_label in (("필름·소모품 비용", "필름·소모품 비용"), ("사용법 안내", "사용법")):
+        assert cards.canonical_label(q08_label) == cards.canonical_label(q07_label)
 
 
 def test_select_areas_uses_the_mapping_constant(monkeypatch):
