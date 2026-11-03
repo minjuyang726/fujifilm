@@ -54,7 +54,10 @@ def _latest_ok_weights(session: Session, review_ids: set[int]) -> tuple[dict[int
     return {rid: v[2] for rid, v in latest.items()}, failed - set(latest)
 
 
-def voc_section(session: Session, family_id: int, round_row: Round, *, weight_floor: float, small_sample_threshold: int) -> dict:
+def build_voc(
+    session: Session, family_id: int, round_row: Round, *, weight_floor: float, small_sample_threshold: int
+) -> tuple[dict, dict[str, list[int]]]:
+    """VOC 집계와, 각 묶음에 들어간 review_id 목록(스냅샷의 근거 허용 목록에 쓴다)을 함께 돌려준다."""
     # 제품군의 리뷰: 본문은 읽지 않고 제목·본문 존재 여부만 읽는다.
     reviews = session.execute(
         select(
@@ -108,7 +111,7 @@ def voc_section(session: Session, family_id: int, round_row: Round, *, weight_fl
         "rating_distribution": [{"rating": rating, "count": _rounded(by_rating.get(rating, 0.0))} for rating in RATINGS],
     }
 
-    return {
+    section = {
         "weight_floor": weight_floor,
         "small_sample_threshold": small_sample_threshold,
         "small_sample": len(judged) < small_sample_threshold,
@@ -132,3 +135,16 @@ def voc_section(session: Session, family_id: int, round_row: Round, *, weight_fl
             "outside_rounds_count": outside_rounds_count,
         },
     }
+    ids = {
+        "total": sorted(r.review_id for r in in_round),
+        "judged": sorted(r.review_id for r in judged),
+        "unjudged": sorted(r.review_id for r in unjudged),
+        "no_text": sorted(r.review_id for r in no_text),
+    }
+    return section, ids
+
+
+def voc_section(session: Session, family_id: int, round_row: Round, *, weight_floor: float, small_sample_threshold: int) -> dict:
+    return build_voc(
+        session, family_id, round_row, weight_floor=weight_floor, small_sample_threshold=small_sample_threshold
+    )[0]
