@@ -97,7 +97,7 @@ def test_evidence_errors(api, session):
     assert error["details"][0]["field"].endswith("evidence_id")
     assert "abc" not in str(error)  # 입력 값은 오류 본문에 되돌려 주지 않는다
     assert_error(api.get("/api/evidence/other/1"), 422, "VALIDATION_ERROR")
-    assert_error(api.get("/api/evidence/survey/1"), 400, "BAD_REQUEST")
+    assert_error(api.get("/api/evidence/survey/1"), 404, "NOT_FOUND")  # 설문 근거는 Phase 5부터 조회된다(없는 번호는 404)
 
 
 def test_unknown_route_and_method_use_the_same_error_shape(api):

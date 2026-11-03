@@ -5,7 +5,7 @@ from app.config import get_settings
 from app.core.errors import register_error_handlers
 from app.core.logging import setup_logging
 from app.core.middleware import REQUEST_ID_HEADER, RequestIdMiddleware
-from app.routers import dashboard, demo, pipeline, read, steps
+from app.routers import dashboard, demo, evidence, pipeline, read, steps
 
 settings = get_settings()
 
@@ -29,3 +29,4 @@ app.include_router(steps.router)  # pipeline 뒤에 등록: ad-judgement 고정 
 app.include_router(demo.router)
 app.include_router(read.router)
 app.include_router(dashboard.router)
+app.include_router(evidence.router)

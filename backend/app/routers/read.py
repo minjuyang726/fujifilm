@@ -1,7 +1,4 @@
-"""화면용 읽기 API: A-1(제품군 목록), A-2(회차 목록), A-4(근거, 리뷰만). 모두 읽기 전용이다.
-
-A-4의 설문 근거(kind=survey)는 Phase 1 범위 밖이라 400으로 거절한다(spec.md A-4, 구현에서 정함).
-"""
+"""화면용 읽기 API: A-1(제품군 목록), A-2(회차 목록), A-4(근거: 리뷰와 설문 응답). 모두 읽기 전용이다."""
 
 from typing import Literal
 
@@ -10,8 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_session
-from app.models import ProductFamily, Review, Round
-from app.schemas.read import FamiliesResponse, ReviewEvidence, RoundsResponse
+from app.models import ProductFamily, Review, Round, SurveyAnswer, SurveyQuestion, SurveyResponse
+from app.schemas.read import FamiliesResponse, ReviewEvidence, RoundsResponse, SurveyEvidence
 
 router = APIRouter(prefix="/api", tags=["read"])
 
@@ -37,12 +34,10 @@ def list_rounds(session: Session = Depends(get_session)) -> dict:
     }
 
 
-@router.get("/evidence/{kind}/{evidence_id}", response_model=ReviewEvidence)
+@router.get("/evidence/{kind}/{evidence_id}", response_model=ReviewEvidence | SurveyEvidence)
 def get_evidence(kind: Literal["review", "survey"], evidence_id: int, session: Session = Depends(get_session)) -> dict:
     if kind == "survey":
-        raise HTTPException(
-            status_code=400, detail={"code": "BAD_REQUEST", "message": "설문 근거 조회는 아직 지원하지 않습니다."}
-        )
+        return _survey_evidence(session, evidence_id)
     # 필요한 열만 읽는다. author는 적재하지 않았고, title은 본문이 없을 때만 본문 자리에 쓴다(SQ-15 기본안).
     row = session.execute(
         select(Review.review_id, Review.rating, Review.date, Review.review_text, Review.title).where(
@@ -64,4 +59,29 @@ def get_evidence(kind: Literal["review", "survey"], evidence_id: int, session: S
         "date": row.date,
         "review_text": text,
         "text_source": source,
+    }
+
+
+def _survey_evidence(session: Session, response_id: int) -> dict:
+    """설문 응답 한 건. 답은 문항 순서대로, 값은 선택지 라벨이다. 합성 응답이면 "합성" 라벨이 붙는다(FR-1.10)."""
+    response = session.get(SurveyResponse, response_id)
+    if response is None:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "근거를 찾을 수 없습니다."})
+    round_row = session.get(Round, response.round_id)
+    rows = session.execute(
+        select(SurveyQuestion.text, SurveyQuestion.options_json, SurveyAnswer.value)
+        .join(SurveyAnswer, SurveyAnswer.question_id == SurveyQuestion.question_id)
+        .where(SurveyAnswer.response_id == response_id)
+        .order_by(SurveyQuestion.question_id, SurveyAnswer.answer_id)
+    ).all()
+    answers = []
+    for text, options, value in rows:
+        labels = {option["code"]: option["label"] for option in options}
+        answers.append({"question_text": text, "value": labels.get(value, value)})
+    return {
+        "kind": "survey",
+        "response_id": response.response_id,
+        "synthetic_label": "합성" if response.is_synthetic else None,
+        "round": {"round_id": round_row.round_id, "label": round_row.label},
+        "answers": answers,
     }
