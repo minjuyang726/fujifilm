@@ -197,3 +197,42 @@ def test_weight_floor_setting(monkeypatch):
         assert "AD_WEIGHT_FLOOR" in str(error.value)
         if bad != "1":  # 오류 메시지에는 값이 아니라 이름만 있다("1"은 안내 문구의 '1 미만'과 겹친다)
             assert bad not in str(error.value)
+
+
+def _api_with_judged(session, count):
+    """제품군 하나에 2026-Q1 안의 판정된 글을 count건 만든 API 클라이언트."""
+    q1 = Round(label="2026-Q1", period_start=date(2026, 1, 1), period_end=date(2026, 3, 31))
+    session.add_all([q1, ProductFamily(name="가")])
+    session.flush()
+    session.add(Product(product_name="pA", family_id=1))
+    session.flush()
+    run = add_run(session, q1.round_id)
+    for review_id in range(1, count + 1):
+        add_review(session, review_id, "pA", 5, date(2026, 2, 1))
+    session.flush()
+    for review_id in range(1, count + 1):
+        judge(session, review_id, run, 1.0)
+    session.commit()
+    app.dependency_overrides[get_session] = lambda: session
+    client = TestClient(app, raise_server_exceptions=False)
+    client.q1 = q1.round_id
+    return client
+
+
+def test_small_sample_badge_boundary_is_below_thirty(session):
+    # 결정: 판정 n이 30건 미만이면 "표본 적음". 29건이면 있고 30건이면 없다.
+    try:
+        from app.config import VOC_SMALL_SAMPLE_THRESHOLD
+
+        assert VOC_SMALL_SAMPLE_THRESHOLD == 30
+        api = _api_with_judged(session, 29)
+        v = voc(api, 1, api.q1)
+        assert v["counts"]["judged"] == 29 and v["small_sample"] is True
+        add_review(session, 30, "pA", 5, date(2026, 2, 1))
+        session.flush()
+        judge(session, 30, session.scalar(select(PipelineRun.run_id)), 1.0)
+        session.commit()
+        v = voc(api, 1, api.q1)
+        assert v["counts"]["judged"] == 30 and v["small_sample"] is False
+    finally:
+        app.dependency_overrides.clear()
