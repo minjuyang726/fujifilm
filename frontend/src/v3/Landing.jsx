@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import ActionPlan from '../ActionPlan.jsx'
 import Dashboard from '../Dashboard.jsx'
 import Reports from '../Reports.jsx'
-import { useJson } from '../api.js'
+import { getJson, useJson } from '../api.js'
 import { DashboardSummary } from '../v2/DashboardPage.jsx'
 import n8nWorkflow from '../assets/n8n-workflow.png'
 import { hashFor } from './route.js'
@@ -401,47 +401,84 @@ function Loop({ familyId, roundId }) {
   )
 }
 
-// 첫 화면 아래쪽: 모든 제품군 x 회차의 실제 액션 카드를 영역 순서별로 세 줄에 흘려 보낸다(움직임을 줄이면 멈춘다).
-function ComboCard({ family, round, order }) {
-  const plan = useJson(`/api/families/${family.family_id}/action-plan?round_id=${round.round_id}`, '찾을 수 없습니다.')
-  const item = plan.status === 'ready' ? plan.data.action_plan.filter((card) => card.card_kind === 'area')[order] : null
-  if (!item) {
-    return null
-  }
+// 첫 화면 아래쪽: 가장 최근 회차 하나의 액션 카드(제품군 x 영역)를 세 줄에 흘려 보낸다(움직임을 줄이면 멈춘다).
+// 회차 이름은 코드에 박지 않고 데이터에서 가장 늦은 회차(period_end, 없으면 round_id)를 고른다.
+const CARD_WIDTH = 340
+const CARD_GAP = 10
+
+function latestRound(rounds) {
+  return rounds.reduce((best, round) => {
+    const key = `${round.period_end ?? ''}|${String(round.round_id).padStart(8, '0')}`
+    const bestKey = `${best.period_end ?? ''}|${String(best.round_id).padStart(8, '0')}`
+    return key > bestKey ? round : best
+  })
+}
+
+// 제품군마다 한 번씩만 가져온다(카드 수와 무관).
+function useLatestPlans(families, round) {
+  const key = round ? `${round.round_id}:${families.map((family) => family.family_id).join(',')}` : ''
+  const [state, setState] = useState({ key: '', plans: [] })
+  useEffect(() => {
+    if (!key) {
+      return undefined
+    }
+    const controller = new AbortController()
+    Promise.all(families.map((family) => getJson(`/api/families/${family.family_id}/action-plan?round_id=${round.round_id}`, controller.signal)))
+      .then((plans) => setState({ key, plans }))
+      .catch(() => {})
+    return () => controller.abort()
+  }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
+  return state.key === key ? state.plans : []
+}
+
+function WallCard({ family, round, item }) {
   return (
     <li className="v3-wall-card">
       <strong>{`${item.area_label} 영역`}</strong>
       <span className="v3-wall-meta">{`${family.name} · ${round.label}`}</span>
       <span className="v3-wall-text">{item.priority_text}</span>
-      <span className="v3-wall-chips">
-        {item.rank_label && <span className="v3-chip mark">{item.rank_label}</span>}
-        {item.has_synthetic && <span className="v3-chip">합성</span>}
-      </span>
+      <span className="v3-wall-chips">{item.rank_label && <span className="v3-chip mark">{item.rank_label}</span>}</span>
     </li>
   )
 }
 
 function HeroWall({ families, rounds }) {
-  const combos = families.flatMap((family) => rounds.map((round) => ({ family, round })))
+  const round = latestRound(rounds)
+  const plans = useLatestPlans(families, round)
   const [paused, setPaused] = useState(false)
+  // 행 하나에 영역 하나를 두고 제품군별 카드를 늘어놓는다. 한 트랙은 화면보다 넓게 반복해, 같은 카드가 나란히 붙지 않는다.
+  const rows = [0, 1, 2]
+    .map((order) =>
+      families
+        .map((family, index) => ({ family, item: plans[index]?.action_plan.filter((card) => card.card_kind === 'area')[order] }))
+        .filter((card) => card.item),
+    )
+    .filter((cards) => cards.length > 0)
   return (
     <>
-    <button type="button" className="v3-wall-toggle" aria-pressed={paused} onClick={() => setPaused(!paused)}>
-      {paused ? '카드 흐름 다시 재생' : '카드 흐름 멈춤'}
-    </button>
-    <div className={paused ? 'v3-wall paused' : 'v3-wall'} data-ui aria-hidden="true">
-      {[0, 1, 2].map((order) => (
-        <div key={order} className={order === 1 ? 'v3-wall-row reverse' : 'v3-wall-row'}>
-          {[0, 1].map((copy) => (
-            <ul key={copy} className="v3-wall-track" aria-hidden={copy === 1 ? true : undefined}>
-              {combos.map(({ family, round }) => (
-                <ComboCard key={`${family.family_id}-${round.round_id}`} family={family} round={round} order={order} />
+      <div className="v3-wall-head">
+        <p className="v3-wall-title">이번 분기에 주목해야 할 VoC</p>
+        <button type="button" className="v3-wall-toggle" aria-pressed={paused} onClick={() => setPaused(!paused)}>
+          {paused ? '카드 흐름 다시 재생' : '카드 흐름 멈춤'}
+        </button>
+      </div>
+      <div className={paused ? 'v3-wall paused' : 'v3-wall'} data-ui aria-hidden="true">
+        {rows.map((cards, rowIndex) => {
+          const repeats = Math.max(1, Math.ceil(1500 / (cards.length * (CARD_WIDTH + CARD_GAP))))
+          return (
+            <div key={rowIndex} className={rowIndex === 1 ? 'v3-wall-row reverse' : 'v3-wall-row'}>
+              {[0, 1].map((copy) => (
+                <ul key={copy} className="v3-wall-track" aria-hidden={copy === 1 ? true : undefined}>
+                  {Array.from({ length: repeats * cards.length }, (_, position) => {
+                    const { family, item } = cards[position % cards.length]
+                    return <WallCard key={position} family={family} round={round} item={item} />
+                  })}
+                </ul>
               ))}
-            </ul>
-          ))}
-        </div>
-      ))}
-    </div>
+            </div>
+          )
+        })}
+      </div>
     </>
   )
 }

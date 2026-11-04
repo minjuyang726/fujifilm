@@ -334,12 +334,23 @@ body.v3-mode #root {
   animation-play-state: paused;
 }
 
-.v3-wall-toggle {
+.v3-wall-head {
   grid-column: 1 / -1;
   grid-row: 3;
-  justify-self: end;
-  align-self: start;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-5);
   margin-top: var(--s-6);
+}
+
+.v3-wall-title {
+  font-size: var(--t-sm);
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.v3-wall-toggle {
   min-height: 44px;
   padding: 0 var(--s-5);
   border: 0;
@@ -357,8 +368,10 @@ body.v3-mode #root {
   color: var(--c-lime);
 }
 
-.v3-wall-track {
+/* .v3-landing ul { padding: 0 }보다 우선해야 트랙 끝 간격이 남아 복제 트랙 이음매도 10px이 된다 */
+.v3-landing .v3-wall-track {
   display: flex;
+  flex: none;
   gap: var(--s-2);
   padding-right: var(--s-2);
   list-style: none;
@@ -368,6 +381,7 @@ body.v3-mode #root {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  flex: none;
   gap: var(--s-1);
   width: 340px;
   padding: var(--s-5) var(--s-6);
@@ -905,7 +919,7 @@ body.v3-mode #root {
   text-underline-offset: 4px;
 }
 
-.v3-footer-name {
+.v3-landing .v3-footer-name {
   display: grid;
   grid-template-columns: auto 1fr;
   column-gap: var(--s-8);
@@ -920,8 +934,9 @@ body.v3-mode #root {
 
 .v3-footer-mark {
   grid-row: 1 / span 2;
-  width: 168px;
-  height: 168px;
+  align-self: center;
+  width: 1.86em;
+  height: 1.86em;
   color: var(--c-lime);
   animation: v3-turn 14s linear infinite;
 }
@@ -1077,10 +1092,6 @@ body.v3-mode #root {
     gap: var(--s-5);
   }
 
-  .v3-wall-toggle {
-    align-self: flex-end;
-  }
-
   .v3-hero-name {
     margin-top: 14svh !important;
     font-size: 56px;
@@ -1212,7 +1223,7 @@ body.v3-mode #root {
     align-self: flex-start;
   }
 
-  .v3-footer-name {
+  .v3-landing .v3-footer-name {
     grid-template-columns: minmax(0, 1fr);
     padding-top: 96px;
     font-size: 36px;
