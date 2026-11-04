@@ -82,7 +82,8 @@ function SurveySection({ survey }) {
   )
 }
 
-function Dashboard() {
+// summary: 선택 사항. 화면 위쪽에 요약을 얹고 싶은 쪽(v2)이 응답 데이터를 받아 그리는 함수다. 없으면 기존 화면 그대로다.
+function Dashboard({ summary }) {
   const [options, setOptions] = useState({ status: 'loading', families: [], rounds: [], message: '' })
   const [familyId, setFamilyId] = useState('')
   const [roundId, setRoundId] = useState('')
@@ -188,6 +189,7 @@ function Dashboard() {
           {view.message}
         </p>
       )}
+      {view.key === selectionKey && view.status === 'ready' && summary?.(view.data)}
       {view.key === selectionKey && view.status === 'ready' && <SurveySection survey={view.data.survey} />}
 
       {view.key === selectionKey && view.status === 'ready' && (

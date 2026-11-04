@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css'
 import { useJson } from '../api.js'
+import DashboardPage from './DashboardPage.jsx'
 import Home from './Home.jsx'
 import './v2.css'
 
@@ -8,6 +9,7 @@ import './v2.css'
 // 여기서는 틀(사이드바, 홈)과 스타일만 새로 만든다. 주소의 # 뒤 값으로 화면을 고른다(/v2#plan).
 const PAGES = [
   { id: 'home', label: '홈(개요·워크플로우)', View: Home },
+  { id: 'dashboard', label: '제품군 대시보드', View: DashboardPage },
 ]
 
 function LoopMark({ size = 28 }) {
