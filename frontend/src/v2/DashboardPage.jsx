@@ -4,7 +4,7 @@ import { FlowBand, PageHead } from './common.jsx'
 const formatCount = (value) => value.toLocaleString('ko-KR')
 
 // 대시보드 위쪽 요약. 응답에 이미 있는 값만 그대로 보인다(새로 계산하는 값 없음). 막대 길이만 비율로 그린다.
-function DashboardSummary({ data }) {
+export function DashboardSummary({ data }) {
   const { survey, voc } = data
   const { counts } = voc
   const judged = voc.unweighted.count

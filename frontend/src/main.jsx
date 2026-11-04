@@ -5,8 +5,17 @@ import App from './App.jsx'
 
 const root = createRoot(document.getElementById('root'))
 
-// /v2 로 들어오면 v2 화면을, 그 밖에는 기존 화면을 보인다(둘을 나란히 비교하려는 임시 분기).
-if (window.location.pathname.replace(/\/+$/, '').startsWith('/v2')) {
+// /v3, /v2 로 들어오면 그 화면을, 그 밖에는 기존 화면을 보인다(나란히 비교하려는 임시 분기).
+const path = window.location.pathname.replace(/\/+$/, '')
+if (path.startsWith('/v3')) {
+  import('./v3/AppV3.jsx').then(({ default: AppV3 }) => {
+    root.render(
+      <StrictMode>
+        <AppV3 />
+      </StrictMode>,
+    )
+  })
+} else if (path.startsWith('/v2')) {
   import('./v2/AppV2.jsx').then(({ default: AppV2 }) => {
     root.render(
       <StrictMode>
