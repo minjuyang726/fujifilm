@@ -9,8 +9,9 @@ const formatCount = (value) => value.toLocaleString('ko-KR')
 const formatPercent = (ratio) => `${(ratio * 100).toFixed(1)}%`
 
 function SyntheticBadge({ label }) {
-  // 색만으로 구분하지 않고 글자로 "합성"을 보인다.
-  return label ? <span className="badge badge-synthetic">{label}</span> : null
+  // 색만으로 구분하지 않고 글자로 "합성"을 보인다. 보고서 말투(v2·v3)에서는 보이지 않는다(copyTone.js).
+  const plain = useContext(PlainCopyContext)
+  return label && !plain ? <span className="badge badge-synthetic">{label}</span> : null
 }
 
 function QuestionCard({ question, respondentCount, syntheticLabel }) {

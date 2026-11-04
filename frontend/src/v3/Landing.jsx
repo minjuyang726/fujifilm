@@ -24,7 +24,7 @@ const CHAPTERS = [
     lead: '회차별 설문 응답과 선택한 제품군의 쿠팡 리뷰를 한 화면에서 봅니다.',
     steps: [
       { title: '제품군과 회차를 고릅니다', text: '두 칸에서 고르면 설문 집계와 리뷰 집계가 함께 바뀝니다. 설문은 제품군과 무관한 공통 설문입니다.', target: '.selector' },
-      { title: '표시부터 읽습니다', text: '"합성"은 합성 설문 응답, "표본 적음"은 판정된 글이 기준보다 적다는 뜻입니다.', target: '.v2-summary' },
+      { title: '표시부터 읽습니다', text: '"표본 적음"은 판정된 글이 기준보다 적다는 뜻입니다. 판정 묶음의 평균 평점은 이 표시를 먼저 보고 읽습니다.', target: '.v2-summary' },
       { title: '문항별 응답을 봅니다', text: '선택지마다 응답 수와 비율을 막대로 봅니다. 복수응답 문항은 비율의 합이 100%를 넘을 수 있습니다.', target: '#survey-heading' },
       { title: '리뷰를 가중과 비가중으로 비교합니다', text: '가중 집계는 광고성이 높은 글의 무게를 낮춘 값입니다. 토글은 판정 묶음에만 적용됩니다.', target: '#voc-heading' },
     ],
@@ -265,7 +265,6 @@ function Picker({ families, rounds, familyId, roundId, onSelect }) {
               <dt>설문 응답</dt>
               <dd>
                 {`${formatCount(data.survey.respondent_count)}건`}
-                {data.survey.synthetic_label && <span className="v3-chip">합성</span>}
               </dd>
             </div>
             <div>
@@ -354,7 +353,6 @@ function Loop({ familyId, roundId }) {
             <>
               <strong>{`${card.area_label} 영역`}</strong>
               <span>{card.priority_text}</span>
-              {card.has_synthetic && <span className="v3-chip">합성</span>}
             </>
           ) : (
             empty

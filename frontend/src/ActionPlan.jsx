@@ -1,6 +1,6 @@
 import { useContext, useState } from 'react'
 import { useJson } from './api.js'
-import { PlainCopyContext, formatKst } from './copyTone.js'
+import { PlainCopyContext, formatKst, plainDisplay } from './copyTone.js'
 
 // 액션플랜 탭(plan.md Phase 5, S-4의 액션플랜 부분 + S-3 근거 뷰어). 읽기 전용이고 실행 버튼은 없다.
 // 문장마다 근거 건수 버튼 -> 쪽 나눔 근거 목록(A-10) -> 항목을 누르면 근거 뷰어(A-4). 작성자는 어디에도 없다(FR-2.5).
@@ -11,7 +11,9 @@ const KIND_LABEL = { review: '리뷰', survey: '설문' }
 const NOT_FOUND = '선택한 제품군 또는 회차를 찾을 수 없습니다. 목록을 새로 고쳐 주세요.'
 
 function SyntheticBadge() {
-  return <span className="badge badge-synthetic">합성</span>
+  // 보고서 말투에서는 "합성" 표기를 그리지 않는다(copyTone.js).
+  const plain = useContext(PlainCopyContext)
+  return plain ? null : <span className="badge badge-synthetic">합성</span>
 }
 
 function EvidenceViewer({ kind, evidenceId }) {
@@ -43,7 +45,7 @@ function EvidenceViewer({ kind, evidenceId }) {
   return (
     <article className="viewer" aria-label="근거 뷰어">
       <h4>
-        {`설문 응답 #${data.response_id}`} {data.synthetic_label && <span className="badge badge-synthetic">{data.synthetic_label}</span>}
+        {`설문 응답 #${data.response_id}`} {data.synthetic_label && !plain && <span className="badge badge-synthetic">{data.synthetic_label}</span>}
       </h4>
       <p className="source-line">{`회차 ${data.round.label}${data.synthetic_label && !plain ? ' · 합성 응답, 시연용이며 성과로 쓰지 않습니다' : ''}`}</p>
       <table className="stats-table result-table">
@@ -68,6 +70,7 @@ function EvidenceViewer({ kind, evidenceId }) {
 }
 
 function EvidenceList({ suggestionId, kind, onClose }) {
+  const plain = useContext(PlainCopyContext)
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState(null)
   const result = useJson(
@@ -105,7 +108,7 @@ function EvidenceList({ suggestionId, kind, onClose }) {
                 >
                   {item.kind === 'review'
                     ? `리뷰 #${item.evidence_id} · 평점 ${item.rating}점 · ${item.date}`
-                    : `설문 응답 #${item.evidence_id}${item.synthetic_label ? ` · ${item.synthetic_label}` : ''}`}
+                    : `설문 응답 #${item.evidence_id}${item.synthetic_label && !plain ? ` · ${item.synthetic_label}` : ''}`}
                 </button>
               </li>
             ))}
@@ -127,6 +130,7 @@ function EvidenceList({ suggestionId, kind, onClose }) {
 
 // 근거 건수 버튼(리뷰, 설문). 카드와 이전 형식 문장이 같이 쓴다.
 function EvidenceButtons({ item, open, onOpen }) {
+  const plain = useContext(PlainCopyContext)
   const { review, survey } = item.evidence_count
   return (
     <div className="plan-evidence">
@@ -145,7 +149,7 @@ function EvidenceButtons({ item, open, onOpen }) {
         disabled={survey === 0}
         onClick={() => onOpen({ suggestionId: item.suggestion_id, kind: 'survey' })}
       >
-        {`설문 ${formatCount(survey)}건 (합성)`}
+        {plain ? `설문 ${formatCount(survey)}건` : `설문 ${formatCount(survey)}건 (합성)`}
       </button>
     </div>
   )
@@ -167,7 +171,7 @@ export function PlanSentence({ item, open, onOpen, onCheckQuestion }) {
           {item.has_synthetic && <SyntheticBadge />}
           {plain && <span className="badge badge-draft">AI 초안</span>}
         </div>
-        <p className="plan-sentence">{item.priority_text}</p>
+        <p className="plan-sentence">{plain ? plainDisplay(item.priority_text) : item.priority_text}</p>
         <div className="draft-box">
           <p className="draft-title">{plain ? item.deliverable_kind : `AI가 작성한 초안 · ${item.deliverable_kind}`}</p>
           {!plain && <p className="draft-note">검토·수정이 필요한 초안입니다</p>}
@@ -192,7 +196,7 @@ export function PlanSentence({ item, open, onOpen, onCheckQuestion }) {
   return (
     <li className="plan-item">
       <p className="plan-sentence">
-        <span className="plan-no">{item.order_no}.</span> {item.sentence}
+        <span className="plan-no">{item.order_no}.</span> {plain ? plainDisplay(item.sentence) : item.sentence}
         {item.has_synthetic && <SyntheticBadge />}
       </p>
       <EvidenceButtons item={item} open={open} onOpen={onOpen} />
@@ -300,7 +304,7 @@ function ActionPlan({ onCheckQuestion, familyId: selectedFamilyId, roundId: sele
               ? `AI 초안 · 생성 ${formatKst(plan.data.report.generated_at)}`
               : `가장 최근 성공한 실행(#${plan.data.report.run_id}) 기준 · 문장 ${plan.data.action_plan.length}개 · 문장은 AI가 코드가 계산한 표를 보고 서술한 것이며 근거는 코드가 붙였습니다`}
           </p>
-          {plan.data.rank_notice && <p className="note rank-notice">{plan.data.rank_notice}</p>}
+          {plan.data.rank_notice && <p className="note rank-notice">{plain ? plainDisplay(plan.data.rank_notice) : plan.data.rank_notice}</p>}
           <ol className="plan-list">
             {plan.data.action_plan.map((item) => (
               <PlanSentence

@@ -27,7 +27,6 @@ export function DashboardSummary({ data }) {
               {formatCount(survey.respondent_count)}
               <small>건 / 회차</small>
             </span>
-            {survey.synthetic_label && <span className="v2-chip neutral">합성</span>}
           </div>
           <div className="v2-kpi">
             <span className="v2-kpi-label">쿠팡 리뷰 (판정 완료)</span>

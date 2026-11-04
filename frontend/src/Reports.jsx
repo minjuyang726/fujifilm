@@ -1,7 +1,7 @@
 import { useContext, useState } from 'react'
 import { PlanSentence } from './ActionPlan.jsx'
 import { apiBaseUrl, useJson } from './api.js'
-import { PlainCopyContext, formatKst } from './copyTone.js'
+import { PlainCopyContext, formatKst, plainDisplay } from './copyTone.js'
 
 // 리포트 탭(plan.md Phase 6, S-4). 액션플랜 문장(근거 건수, 근거 목록·뷰어는 액션플랜 탭과 같은 부품)과
 // 다음 회차 설문지 초안을 한 화면에 보인다. 읽기 전용이고 실행 버튼은 없다. "내보내기"는 HTML 한 파일을 내려받는다(A-7).
@@ -20,7 +20,8 @@ const PREVIEW_NOTE = '응답용 화면이 아닌 문항 미리보기입니다'
 const TICKS = Array.from({ length: 11 }, (_, index) => index)
 
 function SyntheticBadge() {
-  return <span className="badge badge-synthetic">합성</span>
+  const plain = useContext(PlainCopyContext)
+  return plain ? null : <span className="badge badge-synthetic">합성</span>
 }
 
 // 가설 진술문은 합성 설문 수치를 담을 수 있으므로(문장이 "합성 설문의 …"로 시작) 그런 문장에만 합성 라벨을 붙인다.
@@ -115,7 +116,7 @@ export function ReportView({ data, open, onOpen, onCheckQuestion }) {
 
       <section className="demo-section" aria-labelledby="report-plan-heading">
         <h2 id="report-plan-heading">액션플랜</h2>
-        {data.rank_notice && <p className="note rank-notice">{data.rank_notice}</p>}
+        {data.rank_notice && <p className="note rank-notice">{plain ? plainDisplay(data.rank_notice) : data.rank_notice}</p>}
         {data.action_plan.length === 0 ? (
           <p className="note">액션플랜 문장이 없습니다.</p>
         ) : (

@@ -518,8 +518,13 @@ body.v2-mode #root {
   gap: 6px;
 }
 
-.v2 .v2-page-tags .badge {
+.v2 .v2-page-tags .badge,
+.v2 .v2-side-foot .badge {
   margin-left: 0;
+}
+
+.v2 .v2-side-foot .badge {
+  margin-top: 6px;
 }
 
 .v2 .footnote {
