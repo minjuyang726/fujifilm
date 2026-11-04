@@ -1,3 +1,4 @@
+import n8nWorkflow from '../assets/n8n-workflow.png'
 const HOME_STEPS = [
   { title: '광고성 판정', tag: 'AI', ai: true, text: '리뷰 중 광고·홍보성 글을 AI가 가려냅니다.' },
   { title: '집계', tag: '코드', ai: false, text: '건수·비율·순위 같은 숫자는 코드가 계산합니다.' },
@@ -68,10 +69,12 @@ function Home({ go }) {
           <h2>전체 흐름</h2>
           <span className="v2-caption">n8n 워크플로우</span>
         </div>
-        <div className="v2-placeholder">
-          <strong>n8n 워크플로우 이미지</strong>
-          <span>아직 구현 전입니다 · 구현 후 이 자리에 화면 캡처로 교체합니다</span>
-        </div>
+        <figure className="v2-figure">
+          <div className="v2-figure-scroll">
+            <img src={n8nWorkflow} width="1825" height="311" alt="n8n 워크플로우 실행 화면" />
+          </div>
+          <figcaption>n8n 워크플로우 실행 화면: 제품군 × 회차 4개 조합을 하나씩 돌며 분석 → 액션플랜 → 다음 회차 문항 초안 → 리포트 조립을 호출합니다. 대기 단계는 5초 자동 대기이며 담당자 검토를 대신하지 않습니다.</figcaption>
+        </figure>
       </section>
 
       <section>

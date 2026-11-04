@@ -4,6 +4,7 @@ import Dashboard from '../Dashboard.jsx'
 import Reports from '../Reports.jsx'
 import { useJson } from '../api.js'
 import { DashboardSummary } from '../v2/DashboardPage.jsx'
+import n8nWorkflow from '../assets/n8n-workflow.png'
 import { hashFor } from './route.js'
 import { LoopMark } from './LoopMark.jsx'
 
@@ -451,10 +452,12 @@ function Flow() {
     <section className={seen ? 'v3-flow tone-mist in' : 'v3-flow tone-mist'} ref={ref} aria-labelledby="flow-title">
       <h2 id="flow-title">전체 흐름</h2>
       <p>n8n 워크플로우가 분석, 액션플랜, 다음 회차 문항 초안, 리포트 조립 단계를 순서대로 호출합니다.</p>
-      <div className="v3-placeholder">
-        <strong>n8n 워크플로우 이미지</strong>
-        <span>아직 구현 전입니다 · 구현 후 이 자리에 화면 캡처로 교체합니다</span>
-      </div>
+      <figure className="v3-figure">
+        <div className="v3-figure-scroll">
+          <img src={n8nWorkflow} width="1825" height="311" alt="n8n 워크플로우 실행 화면" />
+        </div>
+        <figcaption>n8n 워크플로우 실행 화면: 제품군 × 회차 4개 조합을 하나씩 돌며 분석 → 액션플랜 → 다음 회차 문항 초안 → 리포트 조립을 호출합니다. 대기 단계는 5초 자동 대기이며 담당자 검토를 대신하지 않습니다.</figcaption>
+      </figure>
     </section>
   )
 }

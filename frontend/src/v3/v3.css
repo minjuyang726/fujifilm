@@ -831,6 +831,33 @@ body.v3-mode #root {
   line-height: 30px;
 }
 
+.v3-figure {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--s-6);
+  border-radius: var(--r-xl);
+  background: var(--c-white);
+}
+
+.v3-figure-scroll {
+  overflow-x: auto;
+}
+
+.v3-figure img {
+  display: block;
+  width: 100%;
+  min-width: 720px;
+  height: auto;
+}
+
+.v3-figure figcaption {
+  max-width: 80ch;
+  margin-top: var(--s-5);
+  font-size: var(--t-sm);
+  line-height: 20px;
+  color: var(--c-ink-2);
+}
+
 .v3-placeholder {
   grid-column: 1 / -1;
   min-height: 320px;
@@ -884,7 +911,7 @@ body.v3-mode #root {
   column-gap: var(--s-8);
   align-items: end;
   margin: 0;
-  padding-top: 160px;
+  padding-top: 200px;
   font-size: var(--t-display);
   line-height: var(--lh-display);
   font-weight: 600;
@@ -899,11 +926,11 @@ body.v3-mode #root {
   animation: v3-turn 14s linear infinite;
 }
 
-.v3-footer-name span {
+.v3-footer-name span:not(.loop-mark) {
   grid-column: 2;
 }
 
-.v3-footer-name span:first-of-type {
+.v3-footer-name .loop-mark + span {
   color: var(--c-stone);
 }
 
@@ -1192,7 +1219,7 @@ body.v3-mode #root {
     line-height: 40px;
   }
 
-  .v3-footer-name span {
+  .v3-footer-name span:not(.loop-mark) {
     grid-column: 1;
   }
 

@@ -1,0 +1,166 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1044" viewBox="0 0 1440 1044" font-family="Pretendard, 'Pretendard Variable', 'Noto Sans KR', system-ui, sans-serif">
+<style>text{font-family:Pretendard, 'Pretendard Variable', 'Noto Sans KR', system-ui, sans-serif;white-space:pre}</style>
+<rect x="0" y="0" width="1440" height="1044" rx="0" fill="#f3f1ec" stroke="none" stroke-width="1"/>
+<rect x="240.5" y="8.5" width="1191" height="1027" rx="14" fill="#ffffff" stroke="#e7e4dd" stroke-width="1"/>
+<g transform="translate(24 24)"><circle cx="14" cy="14" r="9.5" fill="none" stroke="#b4501f" stroke-width="3" stroke-dasharray="48 12" transform="rotate(-70 14 14)"/><path d="M20.5 4.5 L25 9.5 L18 11 Z" fill="#b4501f"/></g>
+<text x="64" y="38" font-size="16" font-weight="600" fill="#1a1a18" text-anchor="start" >설문 폐루프</text>
+<text x="64" y="56" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="start" >일회용 카메라 · 인스탁스</text>
+<text x="24" y="112" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="start" >화면</text>
+<text x="28" y="145" font-size="14" font-weight="400" fill="#5c5a54" text-anchor="start" >홈(개요·워크플로우)</text>
+<rect x="12" y="160" width="208" height="32" rx="8" fill="#e8e5de" stroke="none" stroke-width="1"/>
+<text x="28" y="181" font-size="14" font-weight="600" fill="#1a1a18" text-anchor="start" >제품군 대시보드</text>
+<text x="28" y="217" font-size="14" font-weight="400" fill="#5c5a54" text-anchor="start" >액션플랜</text>
+<text x="28" y="253" font-size="14" font-weight="400" fill="#5c5a54" text-anchor="start" >리포트</text>
+<line x1="24" y1="936" x2="216" y2="936" stroke="#e7e4dd" stroke-width="1"/>
+<text x="24" y="960" font-size="12" font-weight="600" fill="#1a1a18" text-anchor="start" >읽기 전용</text>
+<text x="24" y="980" font-size="12" font-weight="400" fill="#5c5a54">설문 근거와 설문 수치는 합성</text>
+<text x="24" y="997" font-size="12" font-weight="400" fill="#5c5a54">응답입니다. 판정 기준 30건은 임시</text>
+<text x="24" y="1014" font-size="12" font-weight="400" fill="#5c5a54">가정입니다.</text>
+<text x="280" y="72" font-size="24" font-weight="600" fill="#1a1a18" text-anchor="start" letter-spacing="-0.4">제품군 대시보드</text>
+<rect x="1020.5" y="48.5" width="159" height="31" rx="6" fill="#fff" stroke="#d6d2c8" stroke-width="1"/>
+<text x="1032" y="68.5" font-size="13" font-weight="400" fill="#5c5a54" text-anchor="start" >회차</text>
+<text x="1066.44" y="68.5" font-size="13" font-weight="500" fill="#1a1a18" text-anchor="start" >2026-Q1</text>
+<path d="M1158 62 l5 5 l5 -5" fill="none" stroke="#5c5a54" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="1192.5" y="48.5" width="199" height="31" rx="6" fill="#fff" stroke="#d6d2c8" stroke-width="1"/>
+<text x="1204" y="68.5" font-size="13" font-weight="400" fill="#5c5a54" text-anchor="start" >제품군</text>
+<text x="1250.66" y="68.5" font-size="13" font-weight="500" fill="#1a1a18" text-anchor="start" >일회용 카메라</text>
+<path d="M1370 62 l5 5 l5 -5" fill="none" stroke="#5c5a54" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="280" y="98" font-size="14" font-weight="400" fill="#5c5a54" text-anchor="start" >이번 회차 영역 순위는 아직 가리지 못했습니다. 판정 표본이 적어 설문 기준으로만 정했습니다.</text>
+<text x="280" y="146" font-size="16" font-weight="600" fill="#1a1a18" text-anchor="start" >분석 흐름</text>
+<text x="1392" y="146" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="end" >집계·검증은 코드가 계산하고, AI는 서술만 합니다</text>
+<rect x="280.5" y="162.5" width="195" height="75" rx="10" fill="#f7f5f0" stroke="#e7e4dd" stroke-width="1"/>
+<text x="296" y="192" font-size="15" font-weight="600" fill="#1a1a18" text-anchor="start" >광고성 판정</text>
+<rect x="296" y="204" width="62" height="22" rx="11" fill="#f8e9df" stroke="none" stroke-width="1"/>
+<text x="305" y="219" font-size="12" font-weight="500" fill="#b4501f" text-anchor="start" >OpenAI</text>
+<path d="M482 200 H501 M495 195 l6 5 l-6 5" fill="none" stroke="#5c5a54" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="509.5" y="162.5" width="195" height="75" rx="10" fill="#fff" stroke="#e7e4dd" stroke-width="1"/>
+<text x="525" y="192" font-size="15" font-weight="600" fill="#1a1a18" text-anchor="start" >집계(분석)</text>
+<rect x="525" y="204" width="41" height="22" rx="11" fill="#efece5" stroke="none" stroke-width="1"/>
+<text x="534" y="219" font-size="12" font-weight="500" fill="#3d3b36" text-anchor="start" >코드</text>
+<path d="M711 200 H730 M724 195 l6 5 l-6 5" fill="none" stroke="#5c5a54" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="738.5" y="162.5" width="195" height="75" rx="10" fill="#f7f5f0" stroke="#e7e4dd" stroke-width="1"/>
+<text x="754" y="192" font-size="15" font-weight="600" fill="#1a1a18" text-anchor="start" >액션플랜</text>
+<rect x="754" y="204" width="62" height="22" rx="11" fill="#f8e9df" stroke="none" stroke-width="1"/>
+<text x="763" y="219" font-size="12" font-weight="500" fill="#b4501f" text-anchor="start" >OpenAI</text>
+<path d="M940 200 H959 M953 195 l6 5 l-6 5" fill="none" stroke="#5c5a54" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="967.5" y="162.5" width="195" height="75" rx="10" fill="#f7f5f0" stroke="#e7e4dd" stroke-width="1"/>
+<text x="983" y="192" font-size="15" font-weight="600" fill="#1a1a18" text-anchor="start" >다음 회차 문항 초안</text>
+<rect x="983" y="204" width="62" height="22" rx="11" fill="#f8e9df" stroke="none" stroke-width="1"/>
+<text x="992" y="219" font-size="12" font-weight="500" fill="#b4501f" text-anchor="start" >OpenAI</text>
+<path d="M1169 200 H1188 M1182 195 l6 5 l-6 5" fill="none" stroke="#5c5a54" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="1196.5" y="162.5" width="195" height="75" rx="10" fill="#fff" stroke="#e7e4dd" stroke-width="1"/>
+<text x="1212" y="192" font-size="15" font-weight="600" fill="#1a1a18" text-anchor="start" >리포트 조립</text>
+<rect x="1212" y="204" width="41" height="22" rx="11" fill="#efece5" stroke="none" stroke-width="1"/>
+<text x="1221" y="219" font-size="12" font-weight="500" fill="#3d3b36" text-anchor="start" >코드</text>
+<text x="280" y="282" font-size="16" font-weight="600" fill="#1a1a18" text-anchor="start" >이번 회차 한눈에</text>
+<text x="1392" y="282" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="end" >실측 · 합성 구분은 칸마다 표시</text>
+<rect x="280.5" y="298.5" width="1111" height="123" rx="10" fill="#fff" stroke="#e7e4dd" stroke-width="1"/>
+<line x1="558" y1="318" x2="558" y2="402" stroke="#efece6" stroke-width="1"/>
+<line x1="836" y1="318" x2="836" y2="402" stroke="#efece6" stroke-width="1"/>
+<line x1="1114" y1="318" x2="1114" y2="402" stroke="#efece6" stroke-width="1"/>
+<text x="304" y="328" font-size="13" font-weight="400" fill="#5c5a54" text-anchor="start" >공동 1순위 영역</text>
+<text x="304" y="374" font-size="40" font-weight="600" fill="#1a1a18" text-anchor="start" style="font-variant-numeric: tabular-nums" >3</text>
+<text x="334" y="374" font-size="14" font-weight="400" fill="#5c5a54" text-anchor="start" >개 영역</text>
+<circle cx="308" cy="398" r="4" fill="#b7791f"/>
+<text x="320" y="402" font-size="12" font-weight="600" fill="#92400e" text-anchor="start" >순위 미확정</text>
+<text x="582" y="328" font-size="13" font-weight="400" fill="#5c5a54" text-anchor="start" >설문 응답</text>
+<text x="582" y="370" font-size="26" font-weight="600" fill="#1a1a18" text-anchor="start" style="font-variant-numeric: tabular-nums" >100</text>
+<text x="636" y="370" font-size="14" font-weight="400" fill="#5c5a54" text-anchor="start" >건 / 회차</text>
+<circle cx="586" cy="398" r="4" fill="#8a8780"/>
+<text x="598" y="402" font-size="12" font-weight="600" fill="#3d3b36" text-anchor="start" >합성 응답</text>
+<text x="860" y="328" font-size="13" font-weight="400" fill="#5c5a54" text-anchor="start" >쿠팡 리뷰 (판정 완료)</text>
+<text x="860" y="370" font-size="26" font-weight="600" fill="#1a1a18" text-anchor="start" style="font-variant-numeric: tabular-nums" >7</text>
+<text x="878" y="370" font-size="14" font-weight="400" fill="#5c5a54" text-anchor="start" >/ 63건</text>
+<circle cx="864" cy="398" r="4" fill="#b7791f"/>
+<text x="876" y="402" font-size="12" font-weight="600" fill="#92400e" text-anchor="start" >표본 적음 · 기준 30건은 임시 가정</text>
+<text x="1138" y="328" font-size="13" font-weight="400" fill="#5c5a54" text-anchor="start" >평균 평점</text>
+<text x="1138" y="370" font-size="26" font-weight="600" fill="#1a1a18" text-anchor="start" style="font-variant-numeric: tabular-nums" >4.29</text>
+<text x="1204" y="370" font-size="14" font-weight="400" fill="#5c5a54" text-anchor="start" >/ 5</text>
+<circle cx="1142" cy="398" r="4" fill="#8a8780"/>
+<text x="1154" y="402" font-size="12" font-weight="600" fill="#3d3b36" text-anchor="start" >실측 · 판정 7건 기준</text>
+<text x="280" y="454" font-size="16" font-weight="600" fill="#1a1a18" text-anchor="start" >영역별 개선 희망 선택 비율</text>
+<text x="956" y="454" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="end" >합성 응답 100건</text>
+<rect x="280.5" y="470.5" width="675" height="253" rx="10" fill="#fff" stroke="#e7e4dd" stroke-width="1"/>
+<line x1="470" y1="498" x2="470" y2="668" stroke="#efece6" stroke-width="1"/>
+<text x="470" y="686" font-size="11" font-weight="400" fill="#5c5a54" text-anchor="middle" style="font-variant-numeric: tabular-nums" >0%</text>
+<line x1="555.2" y1="498" x2="555.2" y2="668" stroke="#efece6" stroke-width="1"/>
+<text x="555.2" y="686" font-size="11" font-weight="400" fill="#5c5a54" text-anchor="middle" style="font-variant-numeric: tabular-nums" >10%</text>
+<line x1="640.4" y1="498" x2="640.4" y2="668" stroke="#efece6" stroke-width="1"/>
+<text x="640.4" y="686" font-size="11" font-weight="400" fill="#5c5a54" text-anchor="middle" style="font-variant-numeric: tabular-nums" >20%</text>
+<line x1="725.6" y1="498" x2="725.6" y2="668" stroke="#efece6" stroke-width="1"/>
+<text x="725.6" y="686" font-size="11" font-weight="400" fill="#5c5a54" text-anchor="middle" style="font-variant-numeric: tabular-nums" >30%</text>
+<line x1="810.8" y1="498" x2="810.8" y2="668" stroke="#efece6" stroke-width="1"/>
+<text x="810.8" y="686" font-size="11" font-weight="400" fill="#5c5a54" text-anchor="middle" style="font-variant-numeric: tabular-nums" >40%</text>
+<line x1="896" y1="498" x2="896" y2="668" stroke="#efece6" stroke-width="1"/>
+<text x="896" y="686" font-size="11" font-weight="400" fill="#5c5a54" text-anchor="middle" style="font-variant-numeric: tabular-nums" >50%</text>
+<text x="304" y="520" font-size="14" font-weight="600" fill="#1a1a18" text-anchor="start" >필름·소모품 비용</text>
+<text x="304" y="538" font-size="11" font-weight="400" fill="#5c5a54" text-anchor="start" style="font-variant-numeric: tabular-nums" >리뷰 0건 · 설문 43건 (합성)</text>
+<rect x="470" y="510" width="281.16" height="24" rx="2" fill="#b4501f" stroke="none" stroke-width="1"/>
+<text x="759.1600000000001" y="528" font-size="14" font-weight="600" fill="#1a1a18" text-anchor="start" style="font-variant-numeric: tabular-nums" >33.0%</text>
+<text x="304" y="576" font-size="14" font-weight="600" fill="#1a1a18" text-anchor="start" >결과물 품질</text>
+<text x="304" y="594" font-size="11" font-weight="400" fill="#5c5a54" text-anchor="start" style="font-variant-numeric: tabular-nums" >리뷰 0건 · 설문 39건 (합성)</text>
+<rect x="470" y="566" width="221.52" height="24" rx="2" fill="#b4501f" stroke="none" stroke-width="1"/>
+<text x="699.52" y="584" font-size="14" font-weight="600" fill="#1a1a18" text-anchor="start" style="font-variant-numeric: tabular-nums" >26.0%</text>
+<text x="304" y="632" font-size="14" font-weight="600" fill="#1a1a18" text-anchor="start" >현상·인화 대기</text>
+<text x="304" y="650" font-size="11" font-weight="400" fill="#5c5a54" text-anchor="start" style="font-variant-numeric: tabular-nums" >리뷰 0건 · 설문 40건 (합성)</text>
+<rect x="470" y="622" width="213" height="24" rx="2" fill="#b4501f" stroke="none" stroke-width="1"/>
+<text x="691" y="640" font-size="14" font-weight="600" fill="#1a1a18" text-anchor="start" style="font-variant-numeric: tabular-nums" >25.0%</text>
+<text x="304" y="706" font-size="12" font-weight="500" fill="#92400e" text-anchor="start" >세 영역의 차이는 우연 범위라 순위를 가리지 못했습니다 · 모두 공동 1순위</text>
+<text x="972" y="454" font-size="16" font-weight="600" fill="#1a1a18" text-anchor="start" >쿠팡 리뷰 판정 현황</text>
+<text x="1392" y="454" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="end" >실측</text>
+<rect x="972.5" y="470.5" width="419" height="253" rx="10" fill="#fff" stroke="#e7e4dd" stroke-width="1"/>
+<text x="996" y="518" font-size="13" font-weight="400" fill="#5c5a54" text-anchor="start" >리뷰</text>
+<rect x="996" y="528" width="332" height="14" rx="2" fill="#eee9e1" stroke="none" stroke-width="1"/>
+<rect x="996" y="528" width="332" height="14" rx="2" fill="#cfc8bb" stroke="none" stroke-width="1"/>
+<text x="1338" y="540" font-size="14" font-weight="600" fill="#1a1a18" text-anchor="start" style="font-variant-numeric: tabular-nums" >63</text>
+<text x="996" y="570" font-size="13" font-weight="400" fill="#5c5a54" text-anchor="start" >제목·본문 없음</text>
+<rect x="996" y="580" width="332" height="14" rx="2" fill="#eee9e1" stroke="none" stroke-width="1"/>
+<rect x="996" y="580" width="263.4920634920635" height="14" rx="2" fill="#cfc8bb" stroke="none" stroke-width="1"/>
+<text x="1338" y="592" font-size="14" font-weight="600" fill="#1a1a18" text-anchor="start" style="font-variant-numeric: tabular-nums" >50</text>
+<text x="996" y="622" font-size="13" font-weight="400" fill="#5c5a54" text-anchor="start" >판정 완료</text>
+<rect x="996" y="632" width="332" height="14" rx="2" fill="#eee9e1" stroke="none" stroke-width="1"/>
+<rect x="996" y="632" width="36.888888888888886" height="14" rx="2" fill="#b4501f" stroke="none" stroke-width="1"/>
+<text x="1338" y="644" font-size="14" font-weight="600" fill="#1a1a18" text-anchor="start" style="font-variant-numeric: tabular-nums" >7</text>
+<text x="996" y="680" font-size="12" font-weight="600" fill="#1a1a18" text-anchor="start" >판정 7건 / 기준 30건</text>
+<rect x="1146" y="671" width="222" height="8" rx="2" fill="#eee9e1" stroke="none" stroke-width="1"/>
+<rect x="1146" y="671" width="51.8" height="8" rx="2" fill="#b4501f" stroke="none" stroke-width="1"/>
+<text x="996" y="700" font-size="11" font-weight="400" fill="#5c5a54" text-anchor="start" >기준 30건은 임시 가정이며 근거가 약합니다</text>
+<text x="280" y="754" font-size="16" font-weight="600" fill="#1a1a18" text-anchor="start" >판정 묶음 평점 분포</text>
+<text x="956" y="754" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="end" >실측 · 판정 7건 기준</text>
+<rect x="280.5" y="770.5" width="675" height="233" rx="10" fill="#fff" stroke="#e7e4dd" stroke-width="1"/>
+<line x1="320" y1="950" x2="916" y2="950" stroke="#efece6" stroke-width="1"/>
+<text x="312" y="954" font-size="11" font-weight="400" fill="#5c5a54" text-anchor="end" style="font-variant-numeric: tabular-nums" >0%</text>
+<line x1="320" y1="902" x2="916" y2="902" stroke="#efece6" stroke-width="1"/>
+<text x="312" y="906" font-size="11" font-weight="400" fill="#5c5a54" text-anchor="end" style="font-variant-numeric: tabular-nums" >25%</text>
+<line x1="320" y1="854" x2="916" y2="854" stroke="#efece6" stroke-width="1"/>
+<text x="312" y="858" font-size="11" font-weight="400" fill="#5c5a54" text-anchor="end" style="font-variant-numeric: tabular-nums" >50%</text>
+<line x1="320" y1="806" x2="916" y2="806" stroke="#efece6" stroke-width="1"/>
+<text x="312" y="810" font-size="11" font-weight="400" fill="#5c5a54" text-anchor="end" style="font-variant-numeric: tabular-nums" >75%</text>
+<rect x="367.8" y="922.544" width="55.6" height="27.456000000000003" rx="0" fill="#b4501f" stroke="none" stroke-width="1"/>
+<text x="395.6" y="914.544" font-size="12" font-weight="600" fill="#1a1a18" text-anchor="middle" style="font-variant-numeric: tabular-nums" >14.3%</text>
+<text x="395.6" y="970" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="middle" style="font-variant-numeric: tabular-nums" >1점 · 1건</text>
+<text x="506.8" y="942" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="middle" style="font-variant-numeric: tabular-nums" >0.0%</text>
+<text x="506.8" y="970" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="middle" style="font-variant-numeric: tabular-nums" >2점 · 0건</text>
+<text x="617.9999999999999" y="942" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="middle" style="font-variant-numeric: tabular-nums" >0.0%</text>
+<text x="617.9999999999999" y="970" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="middle" style="font-variant-numeric: tabular-nums" >3점 · 0건</text>
+<rect x="701.4" y="922.544" width="55.6" height="27.456000000000003" rx="0" fill="#b4501f" stroke="none" stroke-width="1"/>
+<text x="729.1999999999999" y="914.544" font-size="12" font-weight="600" fill="#1a1a18" text-anchor="middle" style="font-variant-numeric: tabular-nums" >14.3%</text>
+<text x="729.1999999999999" y="970" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="middle" style="font-variant-numeric: tabular-nums" >4점 · 1건</text>
+<rect x="812.5999999999999" y="812.912" width="55.6" height="137.088" rx="0" fill="#b4501f" stroke="none" stroke-width="1"/>
+<text x="840.3999999999999" y="804.912" font-size="12" font-weight="600" fill="#1a1a18" text-anchor="middle" style="font-variant-numeric: tabular-nums" >71.4%</text>
+<text x="840.3999999999999" y="970" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="middle" style="font-variant-numeric: tabular-nums" >5점 · 5건</text>
+<line x1="320" y1="950" x2="916" y2="950" stroke="#d6d2c8" stroke-width="1"/>
+<text x="972" y="754" font-size="16" font-weight="600" fill="#1a1a18" text-anchor="start" >이번 회차 확인할 것</text>
+<rect x="972.5" y="770.5" width="419" height="233" rx="10" fill="#fff" stroke="#e7e4dd" stroke-width="1"/>
+<text x="992" y="804" font-size="14" font-weight="600" fill="#1a1a18" text-anchor="start" >다음 회차 문항 1번으로 영역 순위 확인</text>
+<text x="992" y="824" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="start" >세 영역이 공동 1순위입니다</text>
+<text x="1372" y="804" font-size="13" font-weight="600" fill="#b4501f" text-anchor="end" >문항 보기  →</text>
+<line x1="992" y1="846" x2="1372" y2="846" stroke="#efece6" stroke-width="1"/>
+<text x="992" y="874" font-size="14" font-weight="600" fill="#1a1a18" text-anchor="start" >[확인 필요] 칸 채우기</text>
+<text x="992" y="894" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="start" >영역 카드 3장에 6칸</text>
+<text x="1372" y="874" font-size="13" font-weight="600" fill="#b4501f" text-anchor="end" >액션플랜  →</text>
+<line x1="992" y1="916" x2="1372" y2="916" stroke="#efece6" stroke-width="1"/>
+<text x="992" y="944" font-size="14" font-weight="600" fill="#1a1a18" text-anchor="start" >판정 표본 늘리기</text>
+<text x="992" y="964" font-size="12" font-weight="400" fill="#5c5a54" text-anchor="start" >7건 / 기준 30건(임시 가정)</text>
+<text x="1372" y="944" font-size="13" font-weight="600" fill="#b4501f" text-anchor="end" >리뷰 현황  →</text>
+</svg>

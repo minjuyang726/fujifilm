@@ -827,6 +827,30 @@ body.v2-mode #root {
   height: auto;
 }
 
+.v2-figure {
+  margin: 0;
+  padding: 20px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.v2-figure-scroll {
+  overflow-x: auto;
+}
+
+.v2-figure img {
+  display: block;
+  width: 100%;
+  min-width: 720px;
+  height: auto;
+}
+
+.v2-figure figcaption {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
 .v2-placeholder {
   display: flex;
   flex-direction: column;
