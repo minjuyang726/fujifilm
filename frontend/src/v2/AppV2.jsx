@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css'
 import { useJson } from '../api.js'
+import { PlainCopyContext } from '../copyTone.js'
 import DashboardPage from './DashboardPage.jsx'
 import Home from './Home.jsx'
 import { LoopMark } from '../v3/LoopMark.jsx'
@@ -61,6 +62,7 @@ function AppV2() {
   const { View } = PAGES.find((item) => item.id === page)
 
   return (
+    <PlainCopyContext.Provider value={true}>
     <div className="v2">
       <aside className="v2-side">
         <div className="v2-brand">
@@ -86,13 +88,14 @@ function AppV2() {
         </nav>
         <div className="v2-side-foot">
           <strong>읽기 전용</strong>
-          <span>설문 근거와 설문 수치는 합성 응답입니다. 판정 기준 건수는 임시 가정입니다.</span>
+          <span className="badge badge-demo">데모 데이터</span>
         </div>
       </aside>
       <main className="v2-sheet">
         <View go={go} onCheckQuestion={goCheckQuestion} />
       </main>
     </div>
+    </PlainCopyContext.Provider>
   )
 }
 

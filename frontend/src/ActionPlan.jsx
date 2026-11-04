@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import { useJson } from './api.js'
+import { PlainCopyContext, formatKst } from './copyTone.js'
 
 // 액션플랜 탭(plan.md Phase 5, S-4의 액션플랜 부분 + S-3 근거 뷰어). 읽기 전용이고 실행 버튼은 없다.
 // 문장마다 근거 건수 버튼 -> 쪽 나눔 근거 목록(A-10) -> 항목을 누르면 근거 뷰어(A-4). 작성자는 어디에도 없다(FR-2.5).
@@ -14,6 +15,7 @@ function SyntheticBadge() {
 }
 
 function EvidenceViewer({ kind, evidenceId }) {
+  const plain = useContext(PlainCopyContext)
   const result = useJson(`/api/evidence/${kind}/${evidenceId}`, '근거를 찾을 수 없습니다.')
   if (result.status === 'loading') {
     return <p className="note">근거를 불러오는 중입니다.</p>
@@ -43,7 +45,7 @@ function EvidenceViewer({ kind, evidenceId }) {
       <h4>
         {`설문 응답 #${data.response_id}`} {data.synthetic_label && <span className="badge badge-synthetic">{data.synthetic_label}</span>}
       </h4>
-      <p className="source-line">{`회차 ${data.round.label}${data.synthetic_label ? ' · 합성 응답, 시연용이며 성과로 쓰지 않습니다' : ''}`}</p>
+      <p className="source-line">{`회차 ${data.round.label}${data.synthetic_label && !plain ? ' · 합성 응답, 시연용이며 성과로 쓰지 않습니다' : ''}`}</p>
       <table className="stats-table result-table">
         <caption>설문 응답</caption>
         <thead>
@@ -153,6 +155,7 @@ function EvidenceButtons({ item, open, onOpen }) {
 // 쿠팡 리뷰 카드('voc')와 이전 형식 문장('legacy', 또는 card_kind가 없는 응답)은 기존 모양 그대로다.
 // onCheckQuestion: 선택 사항. 주면 "확인 문항" 줄이 눌러서 이동하는 링크가 된다(v2). 없으면 기존 글줄 그대로다.
 export function PlanSentence({ item, open, onOpen, onCheckQuestion }) {
+  const plain = useContext(PlainCopyContext)
   const panel = open && <EvidenceList key={`${open.suggestionId}-${open.kind}`} {...open} onClose={() => onOpen(null)} />
   if (item.card_kind === 'area') {
     return (
@@ -162,11 +165,12 @@ export function PlanSentence({ item, open, onOpen, onCheckQuestion }) {
           <strong className="card-title">{`${item.area_label} 영역`}</strong>
           {item.rank_label && <span className="badge badge-rank">{item.rank_label}</span>}
           {item.has_synthetic && <SyntheticBadge />}
+          {plain && <span className="badge badge-draft">AI 초안</span>}
         </div>
         <p className="plan-sentence">{item.priority_text}</p>
         <div className="draft-box">
-          <p className="draft-title">{`AI가 작성한 초안 · ${item.deliverable_kind}`}</p>
-          <p className="draft-note">검토·수정이 필요한 초안입니다</p>
+          <p className="draft-title">{plain ? item.deliverable_kind : `AI가 작성한 초안 · ${item.deliverable_kind}`}</p>
+          {!plain && <p className="draft-note">검토·수정이 필요한 초안입니다</p>}
           <p className="draft-text">{item.deliverable_text}</p>
         </div>
         <EvidenceButtons item={item} open={open} onOpen={onOpen} />
@@ -199,6 +203,7 @@ export function PlanSentence({ item, open, onOpen, onCheckQuestion }) {
 
 // familyId, roundId, onSelect: 선택 사항. 주면 선택을 바깥(v3)이 정하고, 칸을 바꾸면 onSelect로 알린다. 없으면 화면 안에서 고른다.
 function ActionPlan({ onCheckQuestion, familyId: selectedFamilyId, roundId: selectedRoundId, onSelect }) {
+  const plain = useContext(PlainCopyContext)
   const families = useJson('/api/families', '제품군 목록을 찾을 수 없습니다.')
   const rounds = useJson('/api/rounds', '회차 목록을 찾을 수 없습니다.')
   const [familyChoice, setFamilyChoice] = useState('')
@@ -291,7 +296,9 @@ function ActionPlan({ onCheckQuestion, familyId: selectedFamilyId, roundId: sele
         <section className="demo-section" aria-labelledby="plan-heading">
           <h2 id="plan-heading">액션플랜</h2>
           <p className="source-line">
-            {`가장 최근 성공한 실행(#${plan.data.report.run_id}) 기준 · 문장 ${plan.data.action_plan.length}개 · 문장은 AI가 코드가 계산한 표를 보고 서술한 것이며 근거는 코드가 붙였습니다`}
+            {plain
+              ? `AI 초안 · 생성 ${formatKst(plan.data.report.generated_at)}`
+              : `가장 최근 성공한 실행(#${plan.data.report.run_id}) 기준 · 문장 ${plan.data.action_plan.length}개 · 문장은 AI가 코드가 계산한 표를 보고 서술한 것이며 근거는 코드가 붙였습니다`}
           </p>
           {plan.data.rank_notice && <p className="note rank-notice">{plan.data.rank_notice}</p>}
           <ol className="plan-list">

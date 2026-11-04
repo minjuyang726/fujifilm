@@ -7,7 +7,6 @@ const formatCount = (value) => value.toLocaleString('ko-KR')
 export function DashboardSummary({ data }) {
   const { survey, voc } = data
   const { counts } = voc
-  const judged = voc.unweighted.count
   const mean = voc.unweighted.mean_rating
   const total = counts.total
   const rows = [
@@ -20,7 +19,6 @@ export function DashboardSummary({ data }) {
       <section className="v2-summary" aria-label="이번 회차 한눈에">
         <div className="v2-section-head">
           <h2>이번 회차 한눈에</h2>
-          <span className="v2-caption">실측 · 합성 구분은 칸마다 표시</span>
         </div>
         <div className="v2-kpis">
           <div className="v2-kpi">
@@ -29,7 +27,7 @@ export function DashboardSummary({ data }) {
               {formatCount(survey.respondent_count)}
               <small>건 / 회차</small>
             </span>
-            {survey.synthetic_label && <span className="v2-chip neutral">합성 응답</span>}
+            {survey.synthetic_label && <span className="v2-chip neutral">합성</span>}
           </div>
           <div className="v2-kpi">
             <span className="v2-kpi-label">쿠팡 리뷰 (판정 완료)</span>
@@ -37,7 +35,7 @@ export function DashboardSummary({ data }) {
               {formatCount(counts.judged)}
               <small>{`/ ${formatCount(total)}건`}</small>
             </span>
-            {voc.small_sample && <span className="v2-chip amber">{`표본 적음 · 기준 ${voc.small_sample_threshold}건은 임시 가정`}</span>}
+            {voc.small_sample && <span className="v2-chip amber">표본 적음</span>}
           </div>
           <div className="v2-kpi">
             <span className="v2-kpi-label">평균 평점</span>
@@ -45,7 +43,6 @@ export function DashboardSummary({ data }) {
               {mean === null ? '–' : mean.toFixed(2)}
               <small>/ 5</small>
             </span>
-            <span className="v2-chip neutral">{`실측 · 판정 ${formatCount(judged)}건 기준`}</span>
           </div>
         </div>
       </section>
@@ -70,7 +67,6 @@ export function DashboardSummary({ data }) {
               <div className="v2-fill data" style={{ width: `${Math.min(counts.judged / voc.small_sample_threshold, 1) * 100}%` }} />
             </div>
           </div>
-          <p className="v2-caption">{`기준 ${voc.small_sample_threshold}건은 임시 가정이며 근거가 약합니다`}</p>
         </div>
       </section>
     </>

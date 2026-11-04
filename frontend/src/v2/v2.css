@@ -512,6 +512,21 @@ body.v2-mode #root {
   border: 1px dashed var(--line);
 }
 
+.v2-page-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.v2 .v2-page-tags .badge {
+  margin-left: 0;
+}
+
+.v2 .footnote {
+  display: block;
+  font-size: 11px;
+}
+
 .v2 .badge-small,
 .v2 .badge-rank {
   color: var(--amber-text);

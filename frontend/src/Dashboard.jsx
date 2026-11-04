@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useContext, useEffect, useState } from 'react'
 import { ApiError, errorMessage, getJson } from './api.js'
+import { PlainCopyContext } from './copyTone.js'
 import Voc from './Voc.jsx'
 
 // S-2 제품군 대시보드(plan.md Phase 2·4): 제품군·회차 선택, 설문 집계, 외부 VOC 집계.
@@ -14,16 +15,24 @@ function SyntheticBadge({ label }) {
 
 function QuestionCard({ question, respondentCount, syntheticLabel }) {
   const isMulti = question.type === 'multi'
+  const plain = useContext(PlainCopyContext)
   return (
     <article className="question-card">
       <h3>
         {question.text} <SyntheticBadge label={syntheticLabel} />
         {isMulti && <span className="badge badge-multi">복수응답</span>}
       </h3>
-      <p className="source-line">
-        {`n = ${formatCount(respondentCount)}`}
-        {isMulti && ' · 한 응답자가 여러 개를 고를 수 있어 비율의 합이 100%를 넘을 수 있습니다'}
-      </p>
+      {plain ? (
+        <p className="source-line">
+          {`${formatCount(respondentCount)}명`}
+          {isMulti && <small className="footnote">복수응답이라 비율의 합이 100%를 넘을 수 있습니다</small>}
+        </p>
+      ) : (
+        <p className="source-line">
+          {`n = ${formatCount(respondentCount)}`}
+          {isMulti && ' · 한 응답자가 여러 개를 고를 수 있어 비율의 합이 100%를 넘을 수 있습니다'}
+        </p>
+      )}
       <table className="stats-table result-table">
         <caption>{`${question.text} 선택지별 응답`}</caption>
         <thead>
@@ -57,15 +66,18 @@ function QuestionCard({ question, respondentCount, syntheticLabel }) {
 
 function SurveySection({ survey }) {
   const label = survey.synthetic_label
+  const plain = useContext(PlainCopyContext)
   return (
     <section className="demo-section" aria-labelledby="survey-heading">
       <h2 id="survey-heading">
         설문 집계 <SyntheticBadge label={label} />
       </h2>
-      <p className="source-line">
-        {`응답자 ${formatCount(survey.respondent_count)}명 · 비가중 집계`}
-        {label ? ' · 합성 응답, 시연용이며 성과로 쓰지 않습니다' : ''}
-      </p>
+      {!plain && (
+        <p className="source-line">
+          {`응답자 ${formatCount(survey.respondent_count)}명 · 비가중 집계`}
+          {label ? ' · 합성 응답, 시연용이며 성과로 쓰지 않습니다' : ''}
+        </p>
+      )}
       {survey.questions.length === 0 ? (
         <p className="note">이 회차에는 설문 응답이 없습니다.</p>
       ) : (

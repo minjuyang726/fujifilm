@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css'
 import { useJson } from '../api.js'
+import { PlainCopyContext } from '../copyTone.js'
 import DashboardPage from '../v2/DashboardPage.jsx'
 import PlanPage from '../v2/PlanPage.jsx'
 import ReportPage from '../v2/ReportPage.jsx'
@@ -108,11 +109,16 @@ function AppV3() {
   const selection = familyId && roundId ? { familyId, roundId, onSelect: select } : undefined
 
   if (page === 'home') {
-    return <Landing go={go} families={families} rounds={rounds} selection={selection} />
+    return (
+      <PlainCopyContext.Provider value={true}>
+        <Landing go={go} families={families} rounds={rounds} selection={selection} />
+      </PlainCopyContext.Provider>
+    )
   }
 
   const { View } = SCREENS.find((screen) => screen.id === page)
   return (
+    <PlainCopyContext.Provider value={true}>
     <div className="v2 v3-skin v3-shell">
       <header className="v3-bar">
         <a className="v3-bar-name" href={hashFor('home', familyId, roundId)}>
@@ -149,6 +155,7 @@ function AppV3() {
         )}
       </main>
     </div>
+    </PlainCopyContext.Provider>
   )
 }
 

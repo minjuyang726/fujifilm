@@ -23,7 +23,7 @@ const CHAPTERS = [
     lead: '회차별 설문 응답과 선택한 제품군의 쿠팡 리뷰를 한 화면에서 봅니다.',
     steps: [
       { title: '제품군과 회차를 고릅니다', text: '두 칸에서 고르면 설문 집계와 리뷰 집계가 함께 바뀝니다. 설문은 제품군과 무관한 공통 설문입니다.', target: '.selector' },
-      { title: '표시부터 읽습니다', text: '"합성"은 합성 설문 응답, "표본 적음"은 판정된 글이 기준보다 적다는 뜻입니다. 기준 건수는 임시 가정입니다.', target: '.v2-summary' },
+      { title: '표시부터 읽습니다', text: '"합성"은 합성 설문 응답, "표본 적음"은 판정된 글이 기준보다 적다는 뜻입니다.', target: '.v2-summary' },
       { title: '문항별 응답을 봅니다', text: '선택지마다 응답 수와 비율을 막대로 봅니다. 복수응답 문항은 비율의 합이 100%를 넘을 수 있습니다.', target: '#survey-heading' },
       { title: '리뷰를 가중과 비가중으로 비교합니다', text: '가중 집계는 광고성이 높은 글의 무게를 낮춘 값입니다. 토글은 판정 묶음에만 적용됩니다.', target: '#voc-heading' },
     ],
@@ -53,7 +53,7 @@ const CHAPTERS = [
       { title: '한 문서로 모읍니다', text: '제품군과 회차마다 가장 최근 리포트에 액션플랜과 다음 회차 설문지 초안이 함께 들어 있습니다.', target: '#report-heading' },
       { title: '액션플랜을 다시 확인합니다', text: '액션플랜 화면과 같은 카드와 근거 건수가 리포트에도 그대로 실립니다.', target: '#report-plan-heading' },
       { title: '다음 회차 문항을 봅니다', text: '눈금 막대는 응답용 화면이 아닌 문항 미리보기입니다. 문항은 아직 확정되지 않은 초안입니다.', target: '#report-survey-heading' },
-      { title: '문항이 없는 가설도 봅니다', text: '데이터 보강이 필요한 가설은 문항 없이 따로 남습니다.', target: 'section[aria-labelledby="report-survey-heading"] h3' },
+      { title: '내보내기로 공유합니다', text: '「내보내기 (HTML 한 파일)」로 한 파일로 저장합니다.', target: '#report-heading' },
     ],
     Screen: (props) => <Reports {...props} />,
   },
@@ -271,14 +271,13 @@ function Picker({ families, rounds, familyId, roundId, onSelect }) {
               <dt>쿠팡 리뷰 판정 완료</dt>
               <dd>
                 {`${formatCount(data.voc.counts.judged)} / ${formatCount(data.voc.counts.total)}건`}
-                {data.voc.small_sample && <span className="v3-chip mark">{`표본 적음 · 기준 ${data.voc.small_sample_threshold}건은 임시 가정`}</span>}
+                {data.voc.small_sample && <span className="v3-chip mark">표본 적음</span>}
               </dd>
             </div>
             <div>
               <dt>판정 묶음 평균 평점</dt>
               <dd>
                 {data.voc.unweighted.mean_rating === null ? '–' : data.voc.unweighted.mean_rating.toFixed(2)}
-                <span className="v3-chip">{`실측 · 판정 ${formatCount(data.voc.unweighted.count)}건 기준`}</span>
               </dd>
             </div>
             <div>
@@ -369,7 +368,7 @@ function Loop({ familyId, roundId }) {
             <>
               <strong>{card.deliverable_kind}</strong>
               <span className="v3-clamp">{card.deliverable_text}</span>
-              <span className="v3-chip mark">검토·수정이 필요한 초안입니다</span>
+              <span className="v3-chip mark">AI 초안</span>
             </>
           ) : (
             empty
@@ -553,7 +552,7 @@ function Landing({ go, families, rounds, selection }) {
         <div className="v3-footer-notes">
           <p>제품군별 설문과 쿠팡 리뷰를 함께 보고, 개선 제안의 근거를 추적하고, 다음 회차 설문지 초안까지 한 리포트로 내보냅니다.</p>
           <p>숫자는 코드가 계산하고, AI는 코드가 계산한 표를 보고 글만 씁니다. 문장마다 근거 건수를 붙입니다.</p>
-          <p>설문 수치는 합성 응답이며 성과로 쓰지 않습니다. 판정 기준 건수는 임시 가정입니다. 모든 화면은 읽기 전용입니다.</p>
+          <p>데모 데이터로 동작합니다. 데이터 출처와 한계는 GitHub README에 정리했습니다. 모든 화면은 읽기 전용입니다.</p>
           <a href="#home" onClick={(event) => { event.preventDefault(); window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' }) }}>
             맨 위로
           </a>

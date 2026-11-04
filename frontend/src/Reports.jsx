@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import { PlanSentence } from './ActionPlan.jsx'
 import { apiBaseUrl, useJson } from './api.js'
+import { PlainCopyContext, formatKst } from './copyTone.js'
 
 // 리포트 탭(plan.md Phase 6, S-4). 액션플랜 문장(근거 건수, 근거 목록·뷰어는 액션플랜 탭과 같은 부품)과
 // 다음 회차 설문지 초안을 한 화면에 보인다. 읽기 전용이고 실행 버튼은 없다. "내보내기"는 HTML 한 파일을 내려받는다(A-7).
@@ -51,6 +52,7 @@ export function ScaleBar({ low, high, subject }) {
 export function Question({ question }) {
   const form = question.form ?? question.type
   const isOpportunity = question.kind === 'opportunity_matrix'
+  const plain = useContext(PlainCopyContext)
   return (
     <li className="plan-item">
       <p className="plan-sentence">
@@ -82,24 +84,28 @@ export function Question({ question }) {
             </ul>
           )
         ))}
-      <p className="source-line">
-        {isOpportunity
-          ? `액션 카드의 확인 문항 · ${question.hypothesis_statement}`
-          : `출처 가설(${KIND_LABEL[question.hypothesis_kind] ?? question.hypothesis_kind}): ${question.hypothesis_statement}`}
-        {fromSynthetic(question.hypothesis_statement) && <SyntheticBadge />}
-      </p>
+      {/* 보고서 말투에서는 출처 가설과 확인 문항 안내 문장을 그리지 않는다(데이터와 API 응답은 그대로). */}
+      {!plain && (
+        <p className="source-line">
+          {isOpportunity
+            ? `액션 카드의 확인 문항 · ${question.hypothesis_statement}`
+            : `출처 가설(${KIND_LABEL[question.hypothesis_kind] ?? question.hypothesis_kind}): ${question.hypothesis_statement}`}
+          {fromSynthetic(question.hypothesis_statement) && <SyntheticBadge />}
+        </p>
+      )}
     </li>
   )
 }
 
 // 리포트 본문(액션플랜 절과 문항 초안 절). 화면과 서버 렌더링 점검이 같은 컴포넌트를 쓴다.
 export function ReportView({ data, open, onOpen, onCheckQuestion }) {
+  const plain = useContext(PlainCopyContext)
   const hasScale = data.next_survey.questions.some((question) => SCALE_FORMS.includes(question.form ?? question.type))
   return (
     <>
       <section className="demo-section" aria-labelledby="report-heading">
         <h2 id="report-heading">회차 리포트</h2>
-        <p className="source-line">{`제품군 ${data.family?.name ?? '전체'} · 회차 ${data.round.label} · 생성 ${data.generated_at} · 리포트 #${data.report_id}`}</p>
+        <p className="source-line">{`제품군 ${data.family?.name ?? '전체'} · 회차 ${data.round.label} · 생성 ${plain ? formatKst(data.generated_at) : data.generated_at} · 리포트 #${data.report_id}`}</p>
         <p className="source-line">
           <a className="tab" href={`${apiBaseUrl}/api/reports/${data.report_id}/export?format=html`}>
             내보내기 (HTML 한 파일)
@@ -146,7 +152,7 @@ export function ReportView({ data, open, onOpen, onCheckQuestion }) {
             </ol>
           </>
         )}
-        {(data.next_survey.no_question_hypotheses ?? []).length > 0 && (
+        {!plain && (data.next_survey.no_question_hypotheses ?? []).length > 0 && (
           <>
             <h3>문항이 없는 가설</h3>
             <ul className="evidence-items">

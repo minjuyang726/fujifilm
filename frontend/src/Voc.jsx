@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react'
+import { PlainCopyContext } from './copyTone.js'
 
 // S-2의 외부 VOC 영역(plan.md Phase 4). 판정 / 미판정 / 제목·본문 없음 세 묶음을 보이고,
 // 가중/비가중 토글은 '판정' 묶음에만 적용된다(FR-1.8, FR-1.11). 두 응답은 항상 함께 오고 토글은 화면에서만 바뀐다.
@@ -12,6 +13,10 @@ const BasisContext = createContext('')
 
 function Num({ children, basis }) {
   const fallback = useContext(BasisContext)
+  const plain = useContext(PlainCopyContext)
+  if (plain) {
+    return <span className="num">{children}</span>
+  }
   return (
     <span className="num">
       {children}
@@ -60,6 +65,7 @@ function JudgedGroup({ voc, mode }) {
   const aggregate = weighted ? voc.weighted : voc.unweighted
   const n = voc.unweighted.count
   const basis = weighted ? `판정 ${formatCount(n)}건 기준 · 하한 임시 ${voc.weight_floor}` : `판정 ${formatCount(n)}건 기준`
+  const plain = useContext(PlainCopyContext)
   return (
     <article className="voc-group" aria-labelledby="voc-judged-heading">
       <h3 id="voc-judged-heading">
@@ -67,8 +73,8 @@ function JudgedGroup({ voc, mode }) {
         {voc.small_sample && <span className="badge badge-small">표본 적음</span>}
       </h3>
       <p className="source-line">
-        {`n = ${formatCount(n)}`}
-        {voc.small_sample && ` · 판정된 글이 ${voc.small_sample_threshold}건 미만입니다(기준 ${voc.small_sample_threshold}건은 임시 가정이며 근거가 약합니다)`}
+        {plain ? `${formatCount(n)}건` : `n = ${formatCount(n)}`}
+        {!plain && voc.small_sample && ` · 판정된 글이 ${voc.small_sample_threshold}건 미만입니다(기준 ${voc.small_sample_threshold}건은 임시 가정이며 근거가 약합니다)`}
         {weighted && ` · 가중치 = max(하한, 1 − 광고성 확률), 하한 ${voc.weight_floor}(임시, 근거 약함) · 가중 건수 = 가중치의 합`}
       </p>
       <table className="stats-table summary-table">
@@ -100,11 +106,12 @@ function JudgedGroup({ voc, mode }) {
 
 function OtherGroup({ id, title, count, note, distribution }) {
   const basis = `${title} ${formatCount(count)}건 기준`
+  const plain = useContext(PlainCopyContext)
   return (
     <article className="voc-group" aria-labelledby={id}>
       <h3 id={id}>{title}</h3>
       <p className="source-line">
-        {`n = ${formatCount(count)}`}
+        {plain ? `${formatCount(count)}건` : `n = ${formatCount(count)}`}
         {note}
       </p>
       <DistributionTable title={`${title} 평점 분포`} distribution={distribution} weighted={false} basis={basis} />
@@ -117,16 +124,21 @@ function Vocs({ voc, mode, onModeChange }) {
   const judgementTargets = counts.judged + counts.unjudged
   const familyTotal = counts.total + excluded.count
   const basis = `쿠팡 리뷰 ${formatCount(counts.total)}건 기준`
+  const plain = useContext(PlainCopyContext)
   return (
     <BasisContext.Provider value={basis}>
       <section className="demo-section" aria-labelledby="voc-heading">
         <h2 id="voc-heading">외부 VOC 집계</h2>
         <p className="source-line">
-          {`판정 ${formatCount(counts.judged)}건 / 판정 대상 ${formatCount(judgementTargets)}건 / 전체 ${formatCount(counts.total)}건 · 실측 · ${basis}`}
+          {plain
+            ? `판정 ${formatCount(counts.judged)}건 / 판정 대상 ${formatCount(judgementTargets)}건 / 전체 ${formatCount(counts.total)}건 · 실측`
+            : `판정 ${formatCount(counts.judged)}건 / 판정 대상 ${formatCount(judgementTargets)}건 / 전체 ${formatCount(counts.total)}건 · 실측 · ${basis}`}
         </p>
-        <p className="source-line">
-          {`선택한 회차에 포함되지 않은 ${formatCount(excluded.count)}건 (다른 회차 ${formatCount(excluded.other_round_count)}건, 어느 회차에도 속하지 않음 ${formatCount(excluded.outside_rounds_count)}건) · 선택한 제품군 리뷰 ${formatCount(familyTotal)}건 중, 실측`}
-        </p>
+        {!plain && (
+          <p className="source-line">
+            {`선택한 회차에 포함되지 않은 ${formatCount(excluded.count)}건 (다른 회차 ${formatCount(excluded.other_round_count)}건, 어느 회차에도 속하지 않음 ${formatCount(excluded.outside_rounds_count)}건) · 선택한 제품군 리뷰 ${formatCount(familyTotal)}건 중, 실측`}
+          </p>
+        )}
         <fieldset className="mode-toggle">
           <legend>집계 방식 (판정 묶음에만 적용)</legend>
           <label>
