@@ -49,7 +49,7 @@ n8n은 기존 FastAPI 파이프라인을 순서대로 호출하는 조정자다.
 | POST analysis-snapshot | `POST /api/rounds/{round_id}/pipeline/analysis-snapshot`, 본문 `{"family_id": 정수}` | 없음 |
 | Gate OpenAI | `approveOpenAI`가 `true`가 아니면 멈춘다 | 없음 |
 | POST action-suggestions | `POST .../pipeline/action-suggestions`, 같은 본문 | 호출함(비용 가드는 FastAPI) |
-| Wait for review | 담당자가 검토한 뒤 재개해야 다음으로 간다(Wait, 웹훅 재개) | 없음 |
+| Wait 5s | 5초 자동 대기(Resume: After Time Interval). 담당자 검토를 대신하지 않는다 | 없음 |
 | POST next-survey-draft | `POST .../pipeline/next-survey-draft`, 같은 본문 | 호출함(비용 가드는 FastAPI) |
 | POST report-assembly | `POST .../pipeline/report-assembly`, 같은 본문. 제안과 문항이 있는지 확인하는 기록만 남긴다 | 없음 |
 | GET reports | `GET /api/reports`. 모든 조합이 끝난 뒤 결과 목록을 확인한다 | 없음 |
@@ -57,7 +57,7 @@ n8n은 기존 FastAPI 파이프라인을 순서대로 호출하는 조정자다.
 
 오류 처리: 모든 HTTP 노드는 재시도를 끄고(`retryOnFail: false`), 오류 상태(예: 422 `COST_LIMIT_EXCEEDED`, 500 `PRICE_NOT_CONFIGURED`)도 일단 응답으로 받은 뒤 바로 뒤의 `Check` 노드가 `HTTP 상태 코드`와 응답 본문(`code`, `message`)을 오류로 내며 워크플로우를 멈춘다. 오류 메시지에서 본문을 볼 수 있다.
 
-Wait 노드: 조합마다 한 번씩 멈춘다. 재개 방법(재개 주소가 n8n 화면 어디에 나오는지)은 확인하지 못했다. n8n의 Wait 노드 안내를 따른다. 재개 주소는 localhost 주소이므로 공개하지 않는다.
+Wait 노드: 현재는 5초 자동 대기이며 담당자 검토를 대신하지 않는다. 조합마다 한 번씩 5초 쉬고 다음으로 간다. 사람이 확인하려면 Resume을 On Webhook Call로 되돌린다(이 경우 재개 주소가 n8n 화면 어디에 나오는지는 확인하지 못했고, 재개 주소는 localhost 주소이므로 공개하지 않는다).
 
 ## 설계 근거 (한 줄씩)
 
@@ -65,7 +65,7 @@ Wait 노드: 조합마다 한 번씩 멈춘다. 재개 방법(재개 주소가 n
 - `analysis-snapshot`은 제품군 × 회차 단위라 본문에 `family_id`가 필수다(`StepRequest`는 다른 필드를 받지 않는다).
 - `action-suggestions`는 스냅샷이 먼저 있어야 하고, `next-survey-draft`는 성공한 액션 제안 리포트가 먼저 있어야 한다. 선행이 없으면 FastAPI가 400 `STEP_NOT_READY`를 낸다.
 - `report-assembly`는 새 데이터를 만들지 않고 제안과 문항이 1개 이상인지 확인해 실행 기록만 남긴다.
-- Wait 노드를 `action-suggestions`와 `next-survey-draft` 사이에 둔 이유: 담당자가 제안을 본 뒤에 다음 OpenAI 호출을 하게 하려는 것이다.
+- Wait 노드는 `action-suggestions`와 `next-survey-draft` 사이에 있다. 처음 설계는 담당자 검토 후 재개(On Webhook Call)였으나, 실제 실행(2026-11-04)은 5초 자동 대기로 했다.
 - 비용 가드는 FastAPI 안에 있어 n8n에 두지 않는다(호출 전 예상 상한 검사, 실행 중 누적 검사).
 
 ## 이 흐름에 넣지 않은 것

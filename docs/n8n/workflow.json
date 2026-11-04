@@ -258,20 +258,19 @@
     },
     {
       "parameters": {
-        "resume": "webhook",
-        "httpMethod": "GET",
-        "options": {}
+        "resume": "timeInterval",
+        "amount": 5,
+        "unit": "seconds"
       },
       "id": "7056ec19-a17b-55b9-bf8e-1cf1c4beb6fc",
-      "name": "Wait for review",
+      "name": "Wait 5s",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
       "position": [
         2860,
         480
       ],
-      "notes": "담당자가 액션 제안을 검토한 뒤 재개해야 다음 단계로 간다. 재개 전에는 next-survey-draft를 호출하지 않는다.",
-      "webhookId": "4e849498-5395-5152-ba6f-5f1b918dc9ab"
+      "notes": "5초 자동 대기다. 담당자 검토를 대신하지 않는다. 사람이 확인하려면 Resume을 On Webhook Call로 되돌린다."
     },
     {
       "parameters": {
@@ -546,18 +545,7 @@
       "main": [
         [
           {
-            "node": "Wait for review",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wait for review": {
-      "main": [
-        [
-          {
-            "node": "POST next-survey-draft",
+            "node": "Wait 5s",
             "type": "main",
             "index": 0
           }
@@ -613,6 +601,17 @@
         [
           {
             "node": "Check reports",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 5s": {
+      "main": [
+        [
+          {
+            "node": "POST next-survey-draft",
             "type": "main",
             "index": 0
           }
