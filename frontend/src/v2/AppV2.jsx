@@ -3,6 +3,7 @@ import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css'
 import { useJson } from '../api.js'
 import DashboardPage from './DashboardPage.jsx'
 import Home from './Home.jsx'
+import PlanPage from './PlanPage.jsx'
 import './v2.css'
 
 // v2 화면: 기존 화면(/)과 나란히 비교하려고 /v2 경로에 따로 둔다. 데이터 호출과 계산은 기존 컴포넌트를 그대로 쓰고,
@@ -10,6 +11,7 @@ import './v2.css'
 const PAGES = [
   { id: 'home', label: '홈(개요·워크플로우)', View: Home },
   { id: 'dashboard', label: '제품군 대시보드', View: DashboardPage },
+  { id: 'plan', label: '액션플랜', View: PlanPage },
 ]
 
 function LoopMark({ size = 28 }) {

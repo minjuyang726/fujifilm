@@ -151,7 +151,8 @@ function EvidenceButtons({ item, open, onOpen }) {
 
 // 영역 카드(card_kind = 'area', suggest-v4)는 제목줄·우선순위 문장·"AI가 작성한 초안" 상자·확인 문항으로 보인다.
 // 쿠팡 리뷰 카드('voc')와 이전 형식 문장('legacy', 또는 card_kind가 없는 응답)은 기존 모양 그대로다.
-export function PlanSentence({ item, open, onOpen }) {
+// onCheckQuestion: 선택 사항. 주면 "확인 문항" 줄이 눌러서 이동하는 링크가 된다(v2). 없으면 기존 글줄 그대로다.
+export function PlanSentence({ item, open, onOpen, onCheckQuestion }) {
   const panel = open && <EvidenceList key={`${open.suggestionId}-${open.kind}`} {...open} onClose={() => onOpen(null)} />
   if (item.card_kind === 'area') {
     return (
@@ -169,7 +170,17 @@ export function PlanSentence({ item, open, onOpen }) {
           <p className="draft-text">{item.deliverable_text}</p>
         </div>
         <EvidenceButtons item={item} open={open} onOpen={onOpen} />
-        {item.check_question_no != null && <p className="source-line check-line">{`확인 문항: 다음 회차 문항 ${item.check_question_no}번`}</p>}
+        {item.check_question_no != null && (
+          <p className="source-line check-line">
+            {onCheckQuestion ? (
+              <button type="button" className="link-button" onClick={() => onCheckQuestion(item.check_question_no)}>
+                {`확인 문항: 다음 회차 문항 ${item.check_question_no}번`}
+              </button>
+            ) : (
+              `확인 문항: 다음 회차 문항 ${item.check_question_no}번`
+            )}
+          </p>
+        )}
         {panel}
       </li>
     )
@@ -186,7 +197,7 @@ export function PlanSentence({ item, open, onOpen }) {
   )
 }
 
-function ActionPlan() {
+function ActionPlan({ onCheckQuestion }) {
   const families = useJson('/api/families', '제품군 목록을 찾을 수 없습니다.')
   const rounds = useJson('/api/rounds', '회차 목록을 찾을 수 없습니다.')
   const [familyChoice, setFamilyChoice] = useState('')
@@ -280,6 +291,7 @@ function ActionPlan() {
                 item={item}
                 open={open?.suggestionId === item.suggestion_id ? open : null}
                 onOpen={setOpen}
+                onCheckQuestion={onCheckQuestion}
               />
             ))}
           </ol>
