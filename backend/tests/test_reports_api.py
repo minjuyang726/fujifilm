@@ -145,8 +145,8 @@ def test_export_returns_a_standalone_html_attachment(world):
         else:
             assert html.escape(item["sentence"]) in document  # 쿠팡 리뷰 카드와 이전 형식 문장은 그대로 나온다
     assert "합성" in document and "실측" in document and "초안" in document
-    assert "회차 공통 합성 응답(회차당 100건)" in document
-    assert "표본 적음 — 데이터 보강 필요(문항 없음)" in document and "문항이 없는 가설" in document
+    assert "데모 데이터입니다." in document and "합성 응답에서 나온 시연용 수치" not in document
+    assert re.search(r"생성 \d{4}\.\d{2}\.\d{2} \d{2}:\d{2} ·", document) and "T" not in re.search(r"생성 ([^·]+) ·", document).group(1)
     assert re.search(r"근거 리뷰 \d+건", document) and re.search(r"근거 설문 \d+건\(합성\)", document)
     assert "일회용 카메라" in document and "2026-Q1" in document and "다음 회차 설문지" in document
     for question in body["next_survey"]["questions"]:
@@ -351,7 +351,7 @@ def test_export_renders_cards_notice_draft_box_and_check_question(world):
     set_sentences(world, report, [area("필름·소모품 비용", "공동 1순위"), area("결과물 품질", "공동 1순위"), area("현상·인화 대기", "공동 1순위"), VOC_SENTENCE])
     document = export_of(world, report)
     assert document.count('<li class="card">') == 3 and "필름·소모품 비용 영역" in document and "결과물 품질 영역" in document
-    assert document.count("AI가 작성한 초안") == 3 and document.count("검토·수정이 필요한 초안입니다") == 3
+    assert document.count("AI 초안 · ") == 3 and "검토·수정이 필요한 초안입니다" not in document
     assert document.count("확인 문항: 다음 회차 문항 1번") == 3
     assert document.count("공동 1순위") >= 3 and 'class="badge">공동 1순위</span>' in document
     assert "합성 설문(응답 100건)에서는 상위 영역의 선택 비율 차이가 우연 범위라 순위를 가리지 못했습니다." in document and 'class="notice rank-notice"' in document
@@ -400,7 +400,7 @@ def test_export_of_an_older_report_keeps_the_old_look(world):
     set_sentences(world, report, [LEGACY_SENTENCE, VOC_SENTENCE, LEGACY_SENTENCE, LEGACY_SENTENCE])
     document = export_of(world, report)
     assert document.count("<li>합성 설문에서 추천 응답이 49건이다.") == 3 and f"<li>{VOC_SENTENCE}" in document
-    for absent in ('class="card"', "AI가 작성한 초안", "확인 문항:", "rank-notice", 'class="scale"'):
+    for absent in ('class="card"', "AI 초안", "확인 문항:", "rank-notice", 'class="scale"'):
         assert absent not in document
     assert "초안" in document and "합성" in document and "다음 회차 설문지" in document
     assert find_external_references(document) == []
@@ -411,8 +411,23 @@ def test_export_marks_drafts_and_synthetic_in_every_card_and_stays_free_of_exter
     set_sentences(world, report, [area("필름·소모품 비용", "1순위"), area("결과물 품질", "2순위"), area("현상·인화 대기", "3순위"), VOC_SENTENCE])
     document = export_of(world, report)
     assert "rank-notice" not in document  # 모두 구분되면 안내가 없다
-    assert document.count("AI가 작성한 초안") == 3 and document.count('<span class="badge">합성</span>') >= 3
+    assert document.count("AI 초안 · ") == 3 and document.count('<span class="badge">합성</span>') >= 3
     assert "<h2>다음 회차 설문지<span class=\"badge\">초안</span></h2>" in document
     assert find_external_references(document) == []
     for forbidden in ("<script", "<img", "<link", "src=", "href=", "onclick", "@import", "url("):
         assert forbidden not in document
+
+
+def test_export_does_not_render_removed_phrases(world):
+    # 화면(v2·v3)에서 정리한 문구는 Export HTML에도 다시 나오지 않는다. 데이터와 API 응답에는 그대로 있다.
+    report = full_report(world)
+    set_sentences(world, report, [area("필름·소모품 비용", "공동 1순위"), area("결과물 품질", "공동 1순위"), area("현상·인화 대기", "공동 1순위"), VOC_SENTENCE])
+    body = world.get(f"/api/reports/{report.report_id}").json()
+    assert body["next_survey"]["no_question_hypotheses"]  # 데이터는 그대로
+    document = export_of(world, report)
+    for removed in ("시연용", "성과가 아닙니다", "AI가 작성한 초안", "검토·수정이 필요한 초안입니다", "출처 가설", "불확실 가설", "불일치 가설", "문항이 없는 가설", "액션 카드의 확인 문항:", 'class="hyp"'):
+        assert removed not in document, removed
+    for question in body["next_survey"]["questions"]:
+        if question["hypothesis_statement"]:
+            assert html.escape(question["hypothesis_statement"]) not in document
+    assert "확인 문항: 다음 회차 문항 1번" in document and "[확인 필요]" in document  # 유지할 것

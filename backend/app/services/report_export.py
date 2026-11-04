@@ -1,6 +1,6 @@
 """A-7 내보내기: 독립형 HTML 한 파일(SQ-14, 결정 2026-11-03).
 
-- 담는 것: 제품군·회차·생성 시각, 액션플랜(영역 카드: 영역 라벨·순위 배지·우선순위 문장·"AI가 작성한 초안" 상자·확인 문항 번호, 쿠팡 리뷰 카드,
+- 담는 것: 제품군·회차·생성 시각, 액션플랜(영역 카드: 영역 라벨·순위 배지·우선순위 문장·"AI 초안" 상자·확인 문항 번호, 쿠팡 리뷰 카드,
   이전 형식 문장)과 근거 건수(링크 없음), 순위 안내, 다음 회차 설문지("초안" 표시, scale10·scale10_matrix 문항은 0~10 눈금 막대 미리보기), "합성/실측" 출처 표기.
   눈금 막대는 CSS(그라데이션)로 그린 정적 미리보기라 외부 참조가 없고 숫자와 양끝 라벨을 함께 적는다. 인쇄할 때 카드와 막대가 잘리지 않게 break-inside: avoid를 준다.
 - 담지 않는 것: 리뷰 본문, 작성자, 근거 ID, 링크, 외부 리소스. 근거는 문장마다 건수로만 적는다.
@@ -10,18 +10,31 @@
 
 import html
 import re
+from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 
+# 화면(v2·v3)의 보고서 말투에 맞춰 줄였다: 긴 합성·시연용 안내 대신 "데모 데이터"만 남긴다. 합성 항목에는 "합성" 표기가 따로 붙는다.
 NOTICE = (
-    "이 리포트의 설문 수치는 합성 응답에서 나온 시연용 수치이며 성과가 아닙니다. "
-    "설문은 제품군 구분 없이 회차 공통 합성 응답(회차당 100건)입니다. "
+    "데모 데이터입니다. "
     "외부 VOC 수치는 수집된 쿠팡 리뷰의 실측 집계입니다. 근거는 건수로만 적었고, 개별 근거는 시스템에서 확인합니다."
 )
+KST = timezone(timedelta(hours=9))
+
+
+def format_kst(value: str) -> str:
+    """생성 시각을 화면(copyTone.js formatKst)과 같은 한국시간 "2026.11.04 10:09" 형식으로 보인다. 시간대가 없으면 UTC로 보고, 읽을 수 없으면 받은 값을 그대로 둔다."""
+    try:
+        moment = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(KST).strftime("%Y.%m.%d %H:%M")
+
 TYPE_LABEL = {"scale5": "5점 척도", "single": "하나 고르기", "multi": "여러 개 고르기", "scale10": "0~10 눈금", "scale10_matrix": "항목별 0~10 눈금"}
 SCALE_FORMS = ("scale10", "scale10_matrix")
 SCALE_PREVIEW_NOTE = "응답용 화면이 아닌 문항 미리보기입니다."
 OPPORTUNITY_MARK = "액션 카드의 확인 문항"
-KIND_LABEL = {"uncertain": "불확실 가설", "contradictory": "불일치 가설"}
 
 # 외부 참조 검사는 표준 라이브러리 HTML 파서로 태그와 속성, <style> 내용만 본다. 본문 글(이스케이프된 LLM 출력 포함)은 검사하지 않으므로
 # 글 속에 "http://"나 "src=" 같은 문자열이 있어도 내보내기가 막히지 않는다(이스케이프되어 마크업이 아니다).
@@ -62,12 +75,12 @@ body{font-family:system-ui,'Malgun Gothic','Apple SD Gothic Neo',sans-serif;max-
 h1{font-size:26px;margin:0 0 8px} h2{font-size:20px;margin:28px 0 8px;border-bottom:1px solid #ddd;padding-bottom:4px}
 .meta{color:#555;font-size:14px} .notice{background:#f5f4ee;border:1px solid #ddd;border-radius:6px;padding:8px 12px;font-size:14px}
 .badge{display:inline-block;font-size:12px;font-weight:600;border:1px solid #999;border-radius:999px;padding:1px 8px;margin-left:6px;vertical-align:middle}
-.evidence{display:block;color:#555;font-size:13px} li{margin:10px 0} .hyp{display:block;color:#555;font-size:13px}
+.evidence{display:block;color:#555;font-size:13px} li{margin:10px 0}
 ul.options{margin:4px 0 0 0;padding-left:20px;color:#333;font-size:14px}
 .card{list-style:none;border:1px solid #ccc;border-radius:8px;padding:10px 14px;margin:12px 0}
 ol.plan{padding-left:0} .card-head{font-weight:600} .card-head .no{margin-right:6px}
 .draft{background:#f3f6fd;border:1px dashed #6b86c9;border-radius:6px;padding:8px 12px;margin:8px 0}
-.draft-title{font-weight:600;font-size:14px;margin:0} .draft-note{color:#555;font-size:12px;margin:0 0 4px} .draft-text{margin:0}
+.draft-title{font-weight:600;font-size:14px;margin:0} .draft-text{margin:0}
 .check{color:#333;font-size:13px;margin:6px 0 0}
 .scale{margin:8px 0 12px;max-width:560px}
 .scale-track{height:14px;border:1px solid #6b86c9;border-radius:4px;background:linear-gradient(to right,#e6eefc,#1d3f91);-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -141,8 +154,8 @@ def _plan_item(item: dict) -> str:
     return (
         f'<li class="card"><div class="card-head"><span class="no">{_e(item["order_no"])}.</span>{_e(item["area_label"])} 영역{rank}{badges}</div>'
         f'<p>{_e(item["priority_text"])}</p>'
-        f'<div class="draft"><p class="draft-title">AI가 작성한 초안 · {_e(item["deliverable_kind"])}</p>'
-        f'<p class="draft-note">검토·수정이 필요한 초안입니다</p><p class="draft-text">{_e(item["deliverable_text"])}</p></div>'
+        f'<div class="draft"><p class="draft-title">AI 초안 · {_e(item["deliverable_kind"])}</p>'
+        f'<p class="draft-text">{_e(item["deliverable_text"])}</p></div>'
         f"{evidence}{check}</li>"
     )
 
@@ -156,7 +169,7 @@ def render_report_html(report: dict) -> str:
         f"<title>회차 리포트 - {_e(family)} {_e(report['round']['label'])}</title>",
         f"<style>{STYLE}</style></head><body>",
         "<h1>회차 리포트</h1>",
-        f'<p class="meta">제품군 {_e(family)} · 회차 {_e(report["round"]["label"])} · 생성 {_e(report["generated_at"])} · 리포트 번호 {_e(report["report_id"])}</p>',
+        f'<p class="meta">제품군 {_e(family)} · 회차 {_e(report["round"]["label"])} · 생성 {_e(format_kst(report["generated_at"]))} · 리포트 번호 {_e(report["report_id"])}</p>',
         f'<p class="notice">{_e(NOTICE)}</p>',
         "<h2>액션플랜</h2>",
     ]
@@ -185,27 +198,16 @@ def render_report_html(report: dict) -> str:
                 options = '<ul class="options">' + "".join(f"<li>{_e(o['label'])}</li>" for o in question["options"]) + "</ul>"
             elif question["type"] == "scale5":
                 options = '<ul class="options"><li>1점부터 5점까지 고르기</li></ul>'
-            if question.get("kind") == "opportunity_matrix":
-                hyp = f'<span class="hyp">{_e(OPPORTUNITY_MARK)}: {_e(question["hypothesis_statement"])}</span>'
-                mark = f'<span class="badge">{_e(OPPORTUNITY_MARK)}</span>'
-            else:
-                hyp = f'<span class="hyp">{_e(KIND_LABEL.get(question["hypothesis_kind"], question["hypothesis_kind"]))}: {_e(question["hypothesis_statement"])}</span>'
-                mark = ""
+            # 화면 리포트와 같게 출처 가설·확인 문항 안내 문장은 그리지 않는다(배지만 남긴다).
+            mark = f'<span class="badge">{_e(OPPORTUNITY_MARK)}</span>' if question.get("kind") == "opportunity_matrix" else ""
             parts.append(
                 f'<li>{_e(question["text"])}<span class="badge">{_e(TYPE_LABEL.get(question["type"], question["type"]))}</span>'
-                f'<span class="badge">초안</span>{mark}{options}{hyp}</li>'
+                f'<span class="badge">초안</span>{mark}{options}</li>'
             )
         parts.append("</ol>")
     else:
         parts.append("<p>문항 초안이 없습니다.</p>")
-    notes = report["next_survey"].get("no_question_hypotheses") or []
-    if notes:
-        parts.append("<h2>문항이 없는 가설</h2><ul>")
-        for note in notes:
-            parts.append(
-                f'<li>{_e(note["note"])}<span class="hyp">{_e(KIND_LABEL.get(note["kind"], note["kind"]))}: {_e(note["statement"])}</span></li>'
-            )
-        parts.append("</ul>")
+    # 문항이 없는 가설 절은 화면과 같게 그리지 않는다(데이터와 API 응답에는 그대로 있다).
     parts.append("</body></html>")
     document = "\n".join(parts)
     if find_external_references(document):
