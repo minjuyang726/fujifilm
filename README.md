@@ -37,7 +37,7 @@ frontend 폴더에서:
 
 ```powershell
 npm.cmd install
-npm.cmd run dev               # http://localhost:5173
+npm.cmd run dev               # http://localhost:5173 (기본 화면은 /v3)
 npm.cmd run build
 npm.cmd run lint
 ```
