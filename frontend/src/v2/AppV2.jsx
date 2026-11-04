@@ -4,6 +4,7 @@ import { useJson } from '../api.js'
 import DashboardPage from './DashboardPage.jsx'
 import Home from './Home.jsx'
 import PlanPage from './PlanPage.jsx'
+import ReportPage from './ReportPage.jsx'
 import './v2.css'
 
 // v2 화면: 기존 화면(/)과 나란히 비교하려고 /v2 경로에 따로 둔다. 데이터 호출과 계산은 기존 컴포넌트를 그대로 쓰고,
@@ -12,6 +13,7 @@ const PAGES = [
   { id: 'home', label: '홈(개요·워크플로우)', View: Home },
   { id: 'dashboard', label: '제품군 대시보드', View: DashboardPage },
   { id: 'plan', label: '액션플랜', View: PlanPage },
+  { id: 'report', label: '리포트', View: ReportPage },
 ]
 
 function LoopMark({ size = 28 }) {
@@ -49,6 +51,19 @@ function AppV2() {
     window.scrollTo(0, 0)
   }, [])
 
+  // "확인 문항" 링크: 리포트 화면의 다음 회차 설문지 절로 이동한다. 리포트는 불러오는 데 시간이 걸리므로 절이 나타날 때까지 잠시 기다린다.
+  const goCheckQuestion = useCallback(() => {
+    window.location.hash = 'report'
+    let tries = 0
+    const timer = window.setInterval(() => {
+      const target = document.getElementById('report-survey-heading')
+      tries += 1
+      if (target || tries > 30) {
+        window.clearInterval(timer)
+        target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }, 150)
+  }, [])
 
   const familyNames = families.data?.families.map((family) => family.name).join(' · ')
   const { View } = PAGES.find((item) => item.id === page)
@@ -83,7 +98,7 @@ function AppV2() {
         </div>
       </aside>
       <main className="v2-sheet">
-        <View go={go} />
+        <View go={go} onCheckQuestion={goCheckQuestion} />
       </main>
     </div>
   )

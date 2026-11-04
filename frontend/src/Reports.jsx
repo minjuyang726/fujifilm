@@ -93,7 +93,7 @@ export function Question({ question }) {
 }
 
 // 리포트 본문(액션플랜 절과 문항 초안 절). 화면과 서버 렌더링 점검이 같은 컴포넌트를 쓴다.
-export function ReportView({ data, open, onOpen }) {
+export function ReportView({ data, open, onOpen, onCheckQuestion }) {
   const hasScale = data.next_survey.questions.some((question) => SCALE_FORMS.includes(question.form ?? question.type))
   return (
     <>
@@ -120,6 +120,7 @@ export function ReportView({ data, open, onOpen }) {
                 item={item}
                 open={open?.suggestionId === item.suggestion_id ? open : null}
                 onOpen={onOpen}
+                onCheckQuestion={onCheckQuestion}
               />
             ))}
           </ol>
@@ -163,7 +164,7 @@ export function ReportView({ data, open, onOpen }) {
   )
 }
 
-function Reports() {
+function Reports({ onCheckQuestion }) {
   const families = useJson('/api/families', '제품군 목록을 찾을 수 없습니다.')
   const rounds = useJson('/api/rounds', '회차 목록을 찾을 수 없습니다.')
   const [familyChoice, setFamilyChoice] = useState('')
@@ -250,7 +251,7 @@ function Reports() {
           아직 생성된 리포트가 없습니다. 이 화면은 읽기 전용이며, 분석 스냅샷과 액션 제안 단계가 실행되면 여기에 나타납니다.
         </p>
       )}
-      {data && <ReportView data={data} open={open} onOpen={setOpen} />}
+      {data && <ReportView data={data} open={open} onOpen={setOpen} onCheckQuestion={onCheckQuestion} />}
     </div>
   )
 }
