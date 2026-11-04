@@ -83,10 +83,16 @@ function SurveySection({ survey }) {
 }
 
 // summary: 선택 사항. 화면 위쪽에 요약을 얹고 싶은 쪽(v2)이 응답 데이터를 받아 그리는 함수다. 없으면 기존 화면 그대로다.
-function Dashboard({ summary }) {
+// familyId, roundId, onSelect: 선택 사항. 주면 선택을 바깥(v3)이 정하고, 칸을 바꾸면 onSelect로 알린다. 없으면 화면 안에서 고른다.
+function Dashboard({ summary, familyId: selectedFamilyId, roundId: selectedRoundId, onSelect }) {
   const [options, setOptions] = useState({ status: 'loading', families: [], rounds: [], message: '' })
-  const [familyId, setFamilyId] = useState('')
-  const [roundId, setRoundId] = useState('')
+  const [ownFamilyId, setOwnFamilyId] = useState('')
+  const [ownRoundId, setOwnRoundId] = useState('')
+  const controlled = selectedFamilyId != null && selectedRoundId != null
+  const familyId = controlled ? String(selectedFamilyId) : ownFamilyId
+  const roundId = controlled ? String(selectedRoundId) : ownRoundId
+  const setFamilyId = (value) => (controlled ? onSelect?.(value, roundId) : setOwnFamilyId(value))
+  const setRoundId = (value) => (controlled ? onSelect?.(familyId, value) : setOwnRoundId(value))
   // 가중/비가중 토글은 화면에서만 바꾼다(서버에 보내지 않는다). 선택이 바뀌어도 유지한다.
   const [vocMode, setVocMode] = useState('unweighted')
   // 마지막으로 끝난 요청의 결과. key가 현재 선택과 다르면 아직 불러오는 중이다.
@@ -99,11 +105,12 @@ function Dashboard({ summary }) {
     Promise.all([getJson('/api/families', controller.signal), getJson('/api/rounds', controller.signal)])
       .then(([familyData, roundData]) => {
         setOptions({ status: 'ready', families: familyData.families, rounds: roundData.rounds, message: '' })
+        // 바깥에서 선택을 정할 때는 기본 선택을 두지 않는다.
         if (familyData.families.length > 0) {
-          setFamilyId(String(familyData.families[0].family_id))
+          setOwnFamilyId(String(familyData.families[0].family_id))
         }
         if (roundData.rounds.length > 0) {
-          setRoundId(String(roundData.rounds[0].round_id))
+          setOwnRoundId(String(roundData.rounds[0].round_id))
         }
       })
       .catch((error) => {

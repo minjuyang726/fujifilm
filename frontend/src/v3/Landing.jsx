@@ -4,6 +4,7 @@ import Dashboard from '../Dashboard.jsx'
 import Reports from '../Reports.jsx'
 import { useJson } from '../api.js'
 import { DashboardSummary } from '../v2/DashboardPage.jsx'
+import { hashFor } from './route.js'
 import { LoopMark } from './LoopMark.jsx'
 
 // v3 첫 화면. 장(chapter)마다 색면 하나를 쓰고, 스크롤하면 실제 화면(기존 컴포넌트, 실제 데이터)이 나타나 사용법 단계를 따라 움직인다.
@@ -26,7 +27,7 @@ const CHAPTERS = [
       { title: '문항별 응답을 봅니다', text: '선택지마다 응답 수와 비율을 막대로 봅니다. 복수응답 문항은 비율의 합이 100%를 넘을 수 있습니다.', target: '#survey-heading' },
       { title: '리뷰를 가중과 비가중으로 비교합니다', text: '가중 집계는 광고성이 높은 글의 무게를 낮춘 값입니다. 토글은 판정 묶음에만 적용됩니다.', target: '#voc-heading' },
     ],
-    Screen: () => <Dashboard summary={(data) => <DashboardSummary data={data} />} />,
+    Screen: (props) => <Dashboard summary={(data) => <DashboardSummary data={data} />} {...props} />,
   },
   {
     id: 'plan',
@@ -40,7 +41,7 @@ const CHAPTERS = [
       { title: '근거 건수를 눌러 봅니다', text: '리뷰와 설문 근거 건수를 누르면 근거 목록과 근거 뷰어가 열립니다.', target: '.plan-evidence' },
       { title: '확인 문항으로 이어갑니다', text: '카드마다 다음 회차에서 순위를 확인할 문항 번호가 붙어 있습니다.', target: '.check-line' },
     ],
-    Screen: () => <ActionPlan />,
+    Screen: (props) => <ActionPlan {...props} />,
   },
   {
     id: 'report',
@@ -54,7 +55,7 @@ const CHAPTERS = [
       { title: '다음 회차 문항을 봅니다', text: '눈금 막대는 응답용 화면이 아닌 문항 미리보기입니다. 문항은 아직 확정되지 않은 초안입니다.', target: '#report-survey-heading' },
       { title: '문항이 없는 가설도 봅니다', text: '데이터 보강이 필요한 가설은 문항 없이 따로 남습니다.', target: 'section[aria-labelledby="report-survey-heading"] h3' },
     ],
-    Screen: () => <Reports />,
+    Screen: (props) => <Reports {...props} />,
   },
 ]
 
@@ -142,7 +143,7 @@ function ScreenWindow({ label, target, children }) {
   }, [target, scale])
 
   return (
-    <div className="v3-window" ref={viewport} data-ui role="img" aria-label={`${label} 화면 미리보기`}>
+    <div className="v3-window" ref={viewport} data-ui aria-hidden="true" inert data-label={label}>
       <div className="v3-window-inner v2 v3-skin" ref={content} inert style={{ width: base, transform: `scale(${scale}) translateY(${-shift}px)` }}>
         {children}
       </div>
@@ -150,7 +151,7 @@ function ScreenWindow({ label, target, children }) {
   )
 }
 
-function Chapter({ chapter, go }) {
+function Chapter({ chapter, go, selection, caption }) {
   const section = useRef(null)
   const wide = useWide()
   const [step, setStep] = useState(0)
@@ -214,9 +215,12 @@ function Chapter({ chapter, go }) {
               </button>
             </li>
           </ol>
-          <ScreenWindow label={chapter.name} target={chapter.steps[step].target}>
-            <Screen />
-          </ScreenWindow>
+          <div className="v3-preview">
+            <p className="v3-preview-label">{caption}</p>
+            <ScreenWindow label={chapter.name} target={chapter.steps[step].target}>
+              <Screen {...selection} />
+            </ScreenWindow>
+          </div>
         </div>
       </div>
     </section>
@@ -224,7 +228,7 @@ function Chapter({ chapter, go }) {
 }
 
 // 제품군 x 회차를 고르면 그 회차의 실제 값이 바로 아래에 나온다(대시보드, 액션플랜, 리포트 API의 값 그대로).
-function Picker({ families, rounds, familyId, roundId, onFamily, onRound }) {
+function Picker({ families, rounds, familyId, roundId, onSelect }) {
   const dashboard = useJson(familyId && roundId ? `/api/families/${familyId}/dashboard?round_id=${roundId}` : null, '찾을 수 없습니다.')
   const plan = useJson(familyId && roundId ? `/api/families/${familyId}/action-plan?round_id=${roundId}` : null, '찾을 수 없습니다.')
   const [ref, seen] = useReveal()
@@ -237,14 +241,14 @@ function Picker({ families, rounds, familyId, roundId, onFamily, onRound }) {
     <section className={seen ? 'v3-picker tone-paper in' : 'v3-picker tone-paper'} ref={ref} aria-labelledby="picker-title">
       <h2 id="picker-title" className="v3-picker-line" data-ui>
         <span className="sr-only">회차 요약: </span>
-        <select aria-label="제품군" value={familyId} onChange={(event) => onFamily(event.target.value)}>
+        <select aria-label="제품군" value={familyId} onChange={(event) => onSelect(event.target.value, roundId)}>
           {families.map((family) => (
             <option key={family.family_id} value={family.family_id}>
               {family.name}
             </option>
           ))}
         </select>
-        <select aria-label="회차" value={roundId} onChange={(event) => onRound(event.target.value)}>
+        <select aria-label="회차" value={roundId} onChange={(event) => onSelect(familyId, event.target.value)}>
           {rounds.map((round) => (
             <option key={round.round_id} value={round.round_id}>
               {round.label}
@@ -298,10 +302,7 @@ function Picker({ families, rounds, familyId, roundId, onFamily, onRound }) {
           <button
             key={`${family.family_id}-${round.round_id}`}
             type="button"
-            onClick={() => {
-              onFamily(String(family.family_id))
-              onRound(String(round.round_id))
-            }}
+            onClick={() => onSelect(String(family.family_id), String(round.round_id))}
           >
             {`${family.name} · ${round.label}`}
           </button>
@@ -422,8 +423,13 @@ function ComboCard({ family, round, order }) {
 
 function HeroWall({ families, rounds }) {
   const combos = families.flatMap((family) => rounds.map((round) => ({ family, round })))
+  const [paused, setPaused] = useState(false)
   return (
-    <div className="v3-wall" data-ui aria-label="제품군과 회차별 액션 카드">
+    <>
+    <button type="button" className="v3-wall-toggle" aria-pressed={paused} onClick={() => setPaused(!paused)}>
+      {paused ? '카드 흐름 다시 재생' : '카드 흐름 멈춤'}
+    </button>
+    <div className={paused ? 'v3-wall paused' : 'v3-wall'} data-ui aria-hidden="true">
       {[0, 1, 2].map((order) => (
         <div key={order} className={order === 1 ? 'v3-wall-row reverse' : 'v3-wall-row'}>
           {[0, 1].map((copy) => (
@@ -436,6 +442,7 @@ function HeroWall({ families, rounds }) {
         </div>
       ))}
     </div>
+    </>
   )
 }
 
@@ -453,16 +460,16 @@ function Flow() {
   )
 }
 
-function Landing({ go }) {
-  const families = useJson('/api/families', '제품군 목록을 찾을 수 없습니다.')
-  const rounds = useJson('/api/rounds', '회차 목록을 찾을 수 없습니다.')
-  const [familyChoice, setFamilyChoice] = useState('')
-  const [roundChoice, setRoundChoice] = useState('')
+// families, rounds, selection: AppV3가 내려 준다. 선택(제품군 x 회차)은 v3 전체가 함께 쓰고 주소에 남는다.
+function Landing({ go, families, rounds, selection }) {
   const reduced = usePrefersReducedMotion()
   const familyList = families.data?.families ?? []
   const roundList = rounds.data?.rounds ?? []
-  const familyId = familyChoice || (familyList[0] ? String(familyList[0].family_id) : '')
-  const roundId = roundChoice || (roundList[0] ? String(roundList[0].round_id) : '')
+  const familyId = selection?.familyId ?? ''
+  const roundId = selection?.roundId ?? ''
+  const familyName = familyList.find((family) => String(family.family_id) === familyId)?.name ?? ''
+  const roundLabel = roundList.find((round) => String(round.round_id) === roundId)?.label ?? ''
+  const caption = `미리보기 · ${familyName} · ${roundLabel}`
   const toChapter = (id) => (event) => {
     event.preventDefault()
     document.getElementById(`chapter-${id}`)?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' })
@@ -476,18 +483,22 @@ function Landing({ go }) {
             <LoopMark size={30} />
           </a>
           <div className="v3-top-links">
-            <a href="#chapter-dashboard" onClick={toChapter('dashboard')}>
-              대시보드
-            </a>
-            <a href="#chapter-plan" onClick={toChapter('plan')}>
-              액션플랜
-            </a>
-            <a href="#chapter-report" onClick={toChapter('report')}>
-              리포트
-            </a>
-            <button type="button" className="v3-text-button" onClick={() => go('dashboard')}>
-              화면 열기
-            </button>
+            {[
+              ['dashboard', '대시보드'],
+              ['plan', '액션플랜'],
+              ['report', '리포트'],
+            ].map(([id, label]) => (
+              <a
+                key={id}
+                href={hashFor(id, familyId, roundId)}
+                onClick={(event) => {
+                  event.preventDefault()
+                  go(id)
+                }}
+              >
+                {label}
+              </a>
+            ))}
           </div>
         </nav>
         <h1 className="v3-hero-name">
@@ -514,14 +525,13 @@ function Landing({ go }) {
         {familyList.length > 0 && roundList.length > 0 && <HeroWall families={familyList} rounds={roundList} />}
       </header>
 
-      {families.status === 'ready' && rounds.status === 'ready' && familyList.length > 0 && roundList.length > 0 ? (
+      {selection && familyList.length > 0 && roundList.length > 0 ? (
         <Picker
           families={familyList}
           rounds={roundList}
           familyId={familyId}
           roundId={roundId}
-          onFamily={setFamilyChoice}
-          onRound={setRoundChoice}
+          onSelect={selection.onSelect}
         />
       ) : (
         <section className="v3-picker tone-paper" aria-labelledby="picker-title">
@@ -532,7 +542,7 @@ function Landing({ go }) {
       )}
 
       {CHAPTERS.map((chapter) => (
-        <Chapter key={chapter.id} chapter={chapter} go={go} />
+        <Chapter key={chapter.id} chapter={chapter} go={go} selection={selection} caption={caption} />
       ))}
 
       <Loop familyId={familyId} roundId={roundId} />
@@ -542,7 +552,7 @@ function Landing({ go }) {
       <footer className="v3-footer tone-ink">
         <div className="v3-footer-notes">
           <p>제품군별 설문과 쿠팡 리뷰를 함께 보고, 개선 제안의 근거를 추적하고, 다음 회차 설문지 초안까지 한 리포트로 내보냅니다.</p>
-          <p>숫자는 코드가 계산하고, AI는 코드가 계산한 표를 보고 글만 씁니다. 근거가 없는 문장은 리포트에 담지 않습니다.</p>
+          <p>숫자는 코드가 계산하고, AI는 코드가 계산한 표를 보고 글만 씁니다. 문장마다 근거 건수를 붙입니다.</p>
           <p>설문 수치는 합성 응답이며 성과로 쓰지 않습니다. 판정 기준 건수는 임시 가정입니다. 모든 화면은 읽기 전용입니다.</p>
           <a href="#home" onClick={(event) => { event.preventDefault(); window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' }) }}>
             맨 위로
@@ -565,8 +575,6 @@ function Landing({ go }) {
               리포트
             </button>
           </span>
-          <span>한국후지필름형 정기 설문 폐루프</span>
-          <span>2026</span>
         </div>
       </footer>
     </div>

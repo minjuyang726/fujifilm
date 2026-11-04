@@ -77,12 +77,13 @@ export function DashboardSummary({ data }) {
   )
 }
 
-function DashboardPage() {
+// selection: 선택 사항({ familyId, roundId, onSelect }). v3가 선택을 함께 쓸 때만 넘긴다.
+function DashboardPage({ selection }) {
   return (
     <>
       <PageHead page="dashboard" />
       <FlowBand current={null} />
-      <Dashboard summary={(data) => <DashboardSummary data={data} />} />
+      <Dashboard summary={(data) => <DashboardSummary data={data} />} {...selection} />
     </>
   )
 }

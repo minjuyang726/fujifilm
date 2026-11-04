@@ -3,6 +3,7 @@ import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css'
 import { useJson } from '../api.js'
 import DashboardPage from './DashboardPage.jsx'
 import Home from './Home.jsx'
+import { LoopMark } from '../v3/LoopMark.jsx'
 import PlanPage from './PlanPage.jsx'
 import ReportPage from './ReportPage.jsx'
 import './v2.css'
@@ -15,15 +16,6 @@ const PAGES = [
   { id: 'plan', label: '액션플랜', View: PlanPage },
   { id: 'report', label: '리포트', View: ReportPage },
 ]
-
-function LoopMark({ size = 28 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true">
-      <circle cx="14" cy="14" r="9.5" fill="none" stroke="#b4501f" strokeWidth="3" strokeDasharray="48 12" transform="rotate(-70 14 14)" />
-      <path d="M20.5 4.5 L25 9.5 L18 11 Z" fill="#b4501f" />
-    </svg>
-  )
-}
 
 function pageFromHash() {
   const id = window.location.hash.replace('#', '')
@@ -72,7 +64,7 @@ function AppV2() {
     <div className="v2">
       <aside className="v2-side">
         <div className="v2-brand">
-          <LoopMark />
+          <LoopMark color="#b4501f" />
           <div>
             <strong>정기 설문 폐루프 에이전트</strong>
             {familyNames && <span>{familyNames}</span>}

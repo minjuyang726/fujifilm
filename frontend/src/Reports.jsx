@@ -164,7 +164,8 @@ export function ReportView({ data, open, onOpen, onCheckQuestion }) {
   )
 }
 
-function Reports({ onCheckQuestion }) {
+// familyId, roundId, onSelect: 선택 사항. 주면 선택을 바깥(v3)이 정하고, 칸을 바꾸면 onSelect로 알린다. 없으면 화면 안에서 고른다.
+function Reports({ onCheckQuestion, familyId: selectedFamilyId, roundId: selectedRoundId, onSelect }) {
   const families = useJson('/api/families', '제품군 목록을 찾을 수 없습니다.')
   const rounds = useJson('/api/rounds', '회차 목록을 찾을 수 없습니다.')
   const [familyChoice, setFamilyChoice] = useState('')
@@ -173,8 +174,9 @@ function Reports({ onCheckQuestion }) {
 
   const familyList = families.data?.families ?? []
   const roundList = rounds.data?.rounds ?? []
-  const familyId = familyChoice || (familyList[0] ? String(familyList[0].family_id) : '')
-  const roundId = roundChoice || (roundList[0] ? String(roundList[0].round_id) : '')
+  const controlled = selectedFamilyId != null && selectedRoundId != null
+  const familyId = controlled ? String(selectedFamilyId) : familyChoice || (familyList[0] ? String(familyList[0].family_id) : '')
+  const roundId = controlled ? String(selectedRoundId) : roundChoice || (roundList[0] ? String(roundList[0].round_id) : '')
   const listing = useJson(familyId && roundId ? `/api/reports?round_id=${roundId}&family_id=${familyId}` : null, NOT_FOUND)
   const latest = listing.status === 'ready' ? listing.data.reports[0] : null
   const report = useJson(latest ? `/api/reports/${latest.report_id}` : null, '리포트를 찾을 수 없습니다.')
@@ -205,7 +207,11 @@ function Reports({ onCheckQuestion }) {
             id="report-family"
             value={familyId}
             onChange={(event) => {
-              setFamilyChoice(event.target.value)
+              if (controlled) {
+                onSelect?.(event.target.value, roundId)
+              } else {
+                setFamilyChoice(event.target.value)
+              }
               setOpen(null)
             }}
           >
@@ -222,7 +228,11 @@ function Reports({ onCheckQuestion }) {
             id="report-round"
             value={roundId}
             onChange={(event) => {
-              setRoundChoice(event.target.value)
+              if (controlled) {
+                onSelect?.(familyId, event.target.value)
+              } else {
+                setRoundChoice(event.target.value)
+              }
               setOpen(null)
             }}
           >

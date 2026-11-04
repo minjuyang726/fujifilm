@@ -197,7 +197,8 @@ export function PlanSentence({ item, open, onOpen, onCheckQuestion }) {
   )
 }
 
-function ActionPlan({ onCheckQuestion }) {
+// familyId, roundId, onSelect: 선택 사항. 주면 선택을 바깥(v3)이 정하고, 칸을 바꾸면 onSelect로 알린다. 없으면 화면 안에서 고른다.
+function ActionPlan({ onCheckQuestion, familyId: selectedFamilyId, roundId: selectedRoundId, onSelect }) {
   const families = useJson('/api/families', '제품군 목록을 찾을 수 없습니다.')
   const rounds = useJson('/api/rounds', '회차 목록을 찾을 수 없습니다.')
   const [familyChoice, setFamilyChoice] = useState('')
@@ -207,8 +208,9 @@ function ActionPlan({ onCheckQuestion }) {
   const familyList = families.data?.families ?? []
   const roundList = rounds.data?.rounds ?? []
   // 기본 선택은 첫 제품군과 첫 회차다.
-  const familyId = familyChoice || (familyList[0] ? String(familyList[0].family_id) : '')
-  const roundId = roundChoice || (roundList[0] ? String(roundList[0].round_id) : '')
+  const controlled = selectedFamilyId != null && selectedRoundId != null
+  const familyId = controlled ? String(selectedFamilyId) : familyChoice || (familyList[0] ? String(familyList[0].family_id) : '')
+  const roundId = controlled ? String(selectedRoundId) : roundChoice || (roundList[0] ? String(roundList[0].round_id) : '')
   const plan = useJson(familyId && roundId ? `/api/families/${familyId}/action-plan?round_id=${roundId}` : null, NOT_FOUND)
 
   if (families.status === 'loading' || rounds.status === 'loading') {
@@ -236,7 +238,11 @@ function ActionPlan({ onCheckQuestion }) {
             id="plan-family"
             value={familyId}
             onChange={(event) => {
-              setFamilyChoice(event.target.value)
+              if (controlled) {
+                onSelect?.(event.target.value, roundId)
+              } else {
+                setFamilyChoice(event.target.value)
+              }
               setOpen(null)
             }}
           >
@@ -253,7 +259,11 @@ function ActionPlan({ onCheckQuestion }) {
             id="plan-round"
             value={roundId}
             onChange={(event) => {
-              setRoundChoice(event.target.value)
+              if (controlled) {
+                onSelect?.(familyId, event.target.value)
+              } else {
+                setRoundChoice(event.target.value)
+              }
               setOpen(null)
             }}
           >
