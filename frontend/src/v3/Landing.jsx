@@ -13,6 +13,7 @@ import { LoopMark } from './LoopMark.jsx'
 // 화면 조각을 그리는 기준 폭. 좁은 화면에서는 v2의 좁은 화면 배치를 쓰도록 폭을 줄인다.
 const SCREEN_WIDTH = 1180
 const SCREEN_WIDTH_NARROW = 560
+const SCREEN_WIDTH_STACK = 820 // 액션플랜: 카드를 한 줄에 하나씩 쌓아 단계마다 옮길 높이가 생기게 한다
 const formatCount = (value) => value.toLocaleString('ko-KR')
 
 const CHAPTERS = [
@@ -38,9 +39,9 @@ const CHAPTERS = [
     lead: '코드가 계산한 집계표를 보고 AI가 쓴 개선 제안입니다. 문장마다 근거 건수가 붙습니다.',
     steps: [
       { title: '순위 안내를 먼저 읽습니다', text: '선택 비율의 차이가 우연 범위면 "공동 1순위"로 묶고, 다음 회차 문항으로 다시 묻습니다.', target: '.rank-notice' },
-      { title: '[확인 필요] 칸을 채웁니다', text: 'AI 초안은 운영 사실이 필요한 자리를 비워 둡니다. 채우기 전에는 고객에게 쓰지 않습니다.', target: '.draft-box' },
-      { title: '근거 건수를 눌러 봅니다', text: '리뷰와 설문 근거 건수를 누르면 근거 목록과 근거 뷰어가 열립니다.', target: '.plan-evidence' },
-      { title: '확인 문항으로 이어갑니다', text: '카드마다 다음 회차에서 순위를 확인할 문항 번호가 붙어 있습니다.', target: '.check-line' },
+      { title: '[확인 필요] 칸을 채웁니다', text: 'AI 초안은 운영 사실이 필요한 자리를 비워 둡니다. 채우기 전에는 고객에게 쓰지 않습니다.', target: '.plan-card .draft-box' },
+      { title: '근거 건수를 눌러 봅니다', text: '리뷰와 설문 근거 건수를 누르면 근거 목록과 근거 뷰어가 열립니다.', target: '.plan-evidence .tab:not(:disabled)' },
+      { title: '확인 문항으로 이어갑니다', text: '카드마다 다음 회차에서 순위를 확인할 문항 번호가 붙어 있습니다.', target: '.plan-card .check-line' },
     ],
     Screen: (props) => <ActionPlan {...props} />,
   },
@@ -54,7 +55,7 @@ const CHAPTERS = [
       { title: '한 문서로 모읍니다', text: '제품군과 회차마다 가장 최근 리포트에 액션플랜과 다음 회차 설문지 초안이 함께 들어 있습니다.', target: '#report-heading' },
       { title: '액션플랜을 다시 확인합니다', text: '액션플랜 화면과 같은 카드와 근거 건수가 리포트에도 그대로 실립니다.', target: '#report-plan-heading' },
       { title: '다음 회차 문항을 봅니다', text: '눈금 막대는 응답용 화면이 아닌 문항 미리보기입니다. 문항은 아직 확정되지 않은 초안입니다.', target: '#report-survey-heading' },
-      { title: '내보내기로 공유합니다', text: '「내보내기 (HTML 한 파일)」로 한 파일로 저장합니다.', target: '#report-heading' },
+      { title: '내보내기로 공유합니다', text: '「내보내기 (HTML 한 파일)」로 한 파일로 저장합니다.', target: 'a.tab[href*="/export"]' },
     ],
     Screen: (props) => <Reports {...props} />,
   },
@@ -107,9 +108,9 @@ function useReveal() {
 }
 
 // 실제 화면을 축소해 담는 창. step이 바뀌면 그 단계의 대상 요소가 창 위쪽에 오도록 내용을 옮긴다.
-function ScreenWindow({ label, target, children }) {
+function ScreenWindow({ label, target, progress, stack, children }) {
   const wide = useWide()
-  const base = wide ? SCREEN_WIDTH : SCREEN_WIDTH_NARROW
+  const base = stack && wide ? SCREEN_WIDTH_STACK : wide ? SCREEN_WIDTH : SCREEN_WIDTH_NARROW
   const viewport = useRef(null)
   const content = useRef(null)
   const [scale, setScale] = useState(0.6)
@@ -124,28 +125,39 @@ function ScreenWindow({ label, target, children }) {
     return () => observer.disconnect()
   }, [base])
 
+  // 활성 단계의 목표 요소가 창 가운데 오도록 옮기고 lime 테두리를 준다. 목표가 없으면 장 진행도에 비례해 옮긴다.
   useEffect(() => {
     const measure = () => {
       const root = content.current
+      const win = viewport.current
       const goal = target ? root.querySelector(target) : null
+      root.querySelectorAll('.v3-focus').forEach((node) => node.classList.remove('v3-focus'))
+      const room = Math.max(0, root.scrollHeight - win.clientHeight / scale)
       if (!goal) {
-        setShift(0)
+        setShift(room * progress)
         return
       }
-      const offset = (goal.getBoundingClientRect().top - root.getBoundingClientRect().top) / scale
-      const room = root.scrollHeight - viewport.current.clientHeight / scale
-      setShift(Math.max(0, Math.min(offset - 32, room)))
+      goal.classList.add('v3-focus')
+      const rootTop = root.getBoundingClientRect().top
+      const rect = goal.getBoundingClientRect()
+      const middle = (rect.top - rootTop + rect.height / 2) / scale
+      setShift(Math.max(0, Math.min(middle - win.clientHeight / scale / 2, room)))
     }
     measure()
     // 데이터가 늦게 오면 내용 높이가 바뀌므로 다시 잰다.
     const observer = new ResizeObserver(measure)
     observer.observe(content.current)
     return () => observer.disconnect()
-  }, [target, scale])
+  }, [target, scale, progress])
 
   return (
     <div className="v3-window" ref={viewport} data-ui aria-hidden="true" inert data-label={label}>
-      <div className="v3-window-inner v2 v3-skin" ref={content} inert style={{ width: base, transform: `scale(${scale}) translateY(${-shift}px)` }}>
+      <div
+        className={stack ? 'v3-window-inner v2 v3-skin v3-stack' : 'v3-window-inner v2 v3-skin'}
+        ref={content}
+        inert
+        style={{ width: base, transform: `scale(${scale}) translateY(${-shift}px)` }}
+      >
         {children}
       </div>
     </div>
@@ -156,6 +168,7 @@ function Chapter({ chapter, go, selection, caption }) {
   const section = useRef(null)
   const wide = useWide()
   const [step, setStep] = useState(0)
+  const [progress, setProgress] = useState(0)
   const [ref, seen] = useReveal()
   const count = chapter.steps.length
 
@@ -169,6 +182,7 @@ function Chapter({ chapter, go, selection, caption }) {
       const span = rect.height - window.innerHeight
       const progress = span > 0 ? Math.min(Math.max(-rect.top / span, 0), 0.999) : 0
       setStep(Math.floor(progress * count))
+      setProgress(progress)
     }
     onScroll()
     window.addEventListener('scroll', onScroll, { passive: true })
@@ -218,7 +232,7 @@ function Chapter({ chapter, go, selection, caption }) {
           </ol>
           <div className="v3-preview">
             <p className="v3-preview-label">{caption}</p>
-            <ScreenWindow label={chapter.name} target={chapter.steps[step].target}>
+            <ScreenWindow label={chapter.name} target={chapter.steps[step].target} progress={wide ? progress : step / count} stack={chapter.id === 'plan'}>
               <Screen {...selection} />
             </ScreenWindow>
           </div>

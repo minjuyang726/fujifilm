@@ -657,8 +657,19 @@ body.v3-mode #root {
   left: 0;
   padding: var(--s-9) var(--s-9) var(--s-10);
   transform-origin: 0 0;
-  transition: transform 0.75s var(--ease-out);
+  transition: transform 0.4s var(--ease-out);
   pointer-events: none;
+}
+
+/* 활성 단계의 목표 요소 강조(DESIGN.md lime) */
+.v3-window-inner .v3-focus {
+  outline: 2px solid var(--c-lime);
+  outline-offset: 4px;
+  border-radius: var(--r-md);
+}
+
+.v3-window-inner.v3-stack .plan-list {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* 장 등장: 제목 → 설명 → 단계 → 화면 순서로 올라온다 */
