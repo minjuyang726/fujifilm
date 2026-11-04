@@ -401,6 +401,9 @@ function Loop({ familyId, roundId }) {
 
 // 첫 화면 아래쪽: 가장 최근 회차 하나의 액션 카드(제품군 x 영역)를 세 줄에 흘려 보낸다(움직임을 줄이면 멈춘다).
 // 회차 이름은 코드에 박지 않고 데이터에서 가장 늦은 회차(period_end, 없으면 round_id)를 고른다.
+// 사용한 AI 안내. 모델 이름은 llm_call_log에 기록된 실제 호출(광고성 판정·액션 제안·문항 초안 모두 같은 모델)에서 읽은 값이다.
+const AI_NOTICE = 'AI · OpenAI gpt-5.6-luna — 광고성 판정, 액션플랜 문장, 다음 회차 문항 초안에 사용합니다. 숫자는 코드가 계산합니다.'
+
 const CARD_WIDTH = 340
 const CARD_GAP = 10
 
@@ -612,6 +615,7 @@ function Landing({ go, families, rounds, selection }) {
               리포트
             </button>
           </span>
+          <span className="v3-footer-ai">{AI_NOTICE}</span>
         </div>
       </footer>
     </div>

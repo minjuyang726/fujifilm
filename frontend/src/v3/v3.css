@@ -962,6 +962,15 @@ body.v3-mode #root {
   text-align: center;
 }
 
+.v3-footer-meta > .v3-footer-ai {
+  grid-column: 2 / -1;
+  max-width: 70ch;
+  justify-self: end;
+  font-size: var(--t-sm);
+  line-height: 20px;
+  text-align: right;
+}
+
 .v3-footer-meta > span:last-child {
   text-align: right;
 }
@@ -1244,6 +1253,11 @@ body.v3-mode #root {
   .v3-footer-meta {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--s-1);
+  }
+
+  .v3-footer-meta > .v3-footer-ai {
+    grid-column: 1;
+    justify-self: start;
   }
 
   .v3-footer-meta > span:nth-child(2),
