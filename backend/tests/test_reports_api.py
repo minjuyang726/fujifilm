@@ -425,7 +425,9 @@ def test_export_does_not_render_removed_phrases(world):
     body = world.get(f"/api/reports/{report.report_id}").json()
     assert body["next_survey"]["no_question_hypotheses"]  # 데이터는 그대로
     document = export_of(world, report)
-    for removed in ("시연용", "성과가 아닙니다", "AI가 작성한 초안", "검토·수정이 필요한 초안입니다", "출처 가설", "불확실 가설", "불일치 가설", "문항이 없는 가설", "액션 카드의 확인 문항:", 'class="hyp"'):
+    assert document.count("설문 응답은 시연용 합성 데이터이며, 리뷰는 실제 수집 자료입니다.") == 1
+    assert "설문 기반 분석·제안은 시뮬레이션이며 실제 기업 성과를 의미하지 않습니다." in document
+    for removed in ("성과가 아닙니다", "AI가 작성한 초안", "검토·수정이 필요한 초안입니다", "출처 가설", "불확실 가설", "불일치 가설", "문항이 없는 가설", "액션 카드의 확인 문항:", 'class="hyp"'):
         assert removed not in document, removed
     for question in body["next_survey"]["questions"]:
         if question["hypothesis_statement"]:

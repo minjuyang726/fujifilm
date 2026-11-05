@@ -60,6 +60,7 @@ export function PageHead({ page }) {
         <span className="badge">읽기 전용</span>
         <span className="badge badge-demo">데모 데이터</span>
       </p>
+      <p className="note">데모 데이터: 설문 응답은 시연용 합성 데이터이며, 리뷰는 실제 수집 자료입니다. 설문 기반 분석·제안은 시뮬레이션이며 실제 기업 성과를 의미하지 않습니다.</p>
       {copy.notes.map((text) => (
         <p key={text} className="note">
           {text}

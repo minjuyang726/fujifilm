@@ -37,11 +37,12 @@ export function DashboardSummary({ data }) {
             {voc.small_sample && <span className="v2-chip amber">표본 적음</span>}
           </div>
           <div className="v2-kpi">
-            <span className="v2-kpi-label">평균 평점</span>
+            <span className="v2-kpi-label">판정 완료 리뷰 평균 평점</span>
             <span className="v2-kpi-value">
               {mean === null ? '–' : mean.toFixed(2)}
               <small>/ 5</small>
             </span>
+            <span className="v2-caption">{`비가중 · n=${formatCount(voc.unweighted.count)} · 아래 가중 토글과 무관`}</span>
           </div>
         </div>
       </section>

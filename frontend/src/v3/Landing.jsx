@@ -289,9 +289,10 @@ function Picker({ families, rounds, familyId, roundId, onSelect }) {
               </dd>
             </div>
             <div>
-              <dt>판정 묶음 평균 평점</dt>
+              <dt>판정 완료 리뷰 평균 평점 · 비가중</dt>
               <dd>
                 {data.voc.unweighted.mean_rating === null ? '–' : data.voc.unweighted.mean_rating.toFixed(2)}
+                <small>{` / 5 · n=${formatCount(data.voc.unweighted.count)}`}</small>
               </dd>
             </div>
             <div>
@@ -607,7 +608,7 @@ function Landing({ go, families, rounds, selection }) {
         <div className="v3-footer-notes">
           <p>제품군별 설문과 쿠팡 리뷰를 함께 보고, 개선 제안의 근거를 추적하고, 다음 회차 설문지 초안까지 한 리포트로 내보냅니다.</p>
           <p>숫자는 코드가 계산하고, AI는 코드가 계산한 표를 보고 글만 씁니다. 문장마다 근거 건수를 붙입니다.</p>
-          <p>데모 데이터로 동작합니다. 데이터 출처와 한계는 GitHub README에 정리했습니다. 모든 화면은 읽기 전용입니다.</p>
+          <p>데모 데이터: 설문 응답은 시연용 합성 데이터이며, 리뷰는 실제 수집 자료입니다. 설문 기반 분석·제안은 시뮬레이션이며 실제 기업 성과를 의미하지 않습니다. 데이터 출처와 한계는 GitHub README에 정리했습니다. 모든 화면은 읽기 전용입니다.</p>
           <a href="#home" onClick={(event) => { event.preventDefault(); window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' }) }}>
             맨 위로
           </a>

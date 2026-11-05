@@ -13,9 +13,10 @@ import re
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 
-# 화면(v2·v3)의 보고서 말투에 맞춰 줄였다: 긴 합성·시연용 안내 대신 "데모 데이터"만 남긴다. 합성 항목에는 "합성" 표기가 따로 붙는다.
+# 출처와 한계는 문서 안내에 모으고, 기존 항목별 표시는 유지한다.
 NOTICE = (
-    "데모 데이터입니다. "
+    "데모 데이터입니다. 설문 응답은 시연용 합성 데이터이며, 리뷰는 실제 수집 자료입니다. "
+    "설문 기반 분석·제안은 시뮬레이션이며 실제 기업 성과를 의미하지 않습니다. "
     "외부 VOC 수치는 수집된 쿠팡 리뷰의 실측 집계입니다. 근거는 건수로만 적었고, 개별 근거는 시스템에서 확인합니다."
 )
 KST = timezone(timedelta(hours=9))
