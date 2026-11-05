@@ -26,6 +26,18 @@ function pageFromHash() {
 function AppV2() {
   const [page, setPage] = useState(pageFromHash)
   const families = useJson('/api/families', '제품군 목록을 찾을 수 없습니다.')
+  const rounds = useJson('/api/rounds', '회차 목록을 찾을 수 없습니다.')
+  const [choice, setChoice] = useState({ familyId: '', roundId: '' })
+  const familyList = families.data?.families ?? []
+  const roundList = rounds.data?.rounds ?? []
+  const familyId = familyList.some((family) => String(family.family_id) === choice.familyId)
+    ? choice.familyId : String(familyList[0]?.family_id ?? '')
+  const roundId = roundList.some((round) => String(round.round_id) === choice.roundId)
+    ? choice.roundId : String(roundList[0]?.round_id ?? '')
+  const onSelect = useCallback((nextFamily, nextRound) => {
+    setChoice({ familyId: String(nextFamily), roundId: String(nextRound) })
+  }, [])
+  const selection = familyId && roundId ? { familyId, roundId, onSelect } : null
 
   useEffect(() => {
     document.documentElement.classList.add('v2-mode')
@@ -92,7 +104,11 @@ function AppV2() {
         </div>
       </aside>
       <main className="v2-sheet">
-        <View go={go} onCheckQuestion={goCheckQuestion} />
+        {page === 'home' || selection ? (
+          <View go={go} onCheckQuestion={goCheckQuestion} selection={selection} />
+        ) : (
+          <p className="note">{families.status === 'error' ? families.message : rounds.status === 'error' ? rounds.message : families.status === 'ready' && rounds.status === 'ready' ? '등록된 제품군 또는 회차가 없습니다.' : '목록을 불러오는 중입니다.'}</p>
+        )}
       </main>
     </div>
     </PlainCopyContext.Provider>

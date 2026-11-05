@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css'
 import { useJson } from '../api.js'
 import { PlainCopyContext } from '../copyTone.js'
@@ -9,6 +9,7 @@ import '../v2/v2.css'
 import Landing from './Landing.jsx'
 import { hashFor } from './route.js'
 import { LoopMark } from './LoopMark.jsx'
+import { observeHeaderOffset } from './scrollOffset.js'
 import './v3.css'
 
 // v3: 첫 화면은 스크롤로 읽는 소개(Landing), 나머지 화면은 v2와 같은 컴포넌트에 디자인 시스템(DESIGN.md) 색과 글꼴만 입힌다.
@@ -43,6 +44,7 @@ function scrollToWhenReady(id) {
 }
 
 function AppV3() {
+  const headerRef = useRef(null)
   const [route, setRoute] = useState(readHash)
   const families = useJson('/api/families', '제품군 목록을 찾을 수 없습니다.')
   const rounds = useJson('/api/rounds', '회차 목록을 찾을 수 없습니다.')
@@ -57,6 +59,12 @@ function AppV3() {
       : ''
   const roundId = roundList.some((round) => String(round.round_id) === route.round) ? route.round : roundList[0] ? String(roundList[0].round_id) : ''
   const page = route.page
+
+  // 줄바꿈·390px 전환·글꼴 로딩으로 달라지는 실제 헤더 높이를 스크롤 여백에 반영한다.
+  useLayoutEffect(() => {
+    if (!headerRef.current) return undefined
+    return observeHeaderOffset(headerRef.current)
+  }, [page])
 
   useEffect(() => {
     document.documentElement.classList.add('v3-mode')
@@ -120,7 +128,7 @@ function AppV3() {
   return (
     <PlainCopyContext.Provider value={true}>
     <div className="v2 v3-skin v3-shell">
-      <header className="v3-bar">
+      <header className="v3-bar" ref={headerRef}>
         <a className="v3-bar-name" href={hashFor('home', familyId, roundId)}>
           <LoopMark size={24} />
           <span>정기 설문 폐루프 에이전트</span>

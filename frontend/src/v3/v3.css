@@ -1321,6 +1321,10 @@ body.v3-mode #root {
   color: var(--c-ink);
 }
 
+.v3-shell #report-survey-heading {
+  scroll-margin-top: calc(var(--v3-header-height, 0px) + 16px);
+}
+
 .v3-bar-name {
   display: inline-flex;
   align-items: center;
